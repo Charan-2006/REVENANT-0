@@ -4,7 +4,7 @@ import { INITIAL_VESSELS } from '../src/data/vessels.ts';
 import { INITIAL_RESTRICTED_AREAS } from '../src/data/mockRestrictedAreas.ts';
 
 console.log('====================================================');
-console.log('RUNNING COASTAL VIEW COMPREHENSIVE RUNTIME ENGINE VERIFICATION');
+console.log('RUNNING REVENANT COMPREHENSIVE RUNTIME ENGINE VERIFICATION');
 console.log('====================================================\n');
 
 // Simulation helper for evaluateVesselGeofence

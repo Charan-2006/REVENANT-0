@@ -44,7 +44,7 @@ export function exportToCSV(detections: VesselDetection[]) {
     ...rows.map(r => r.map(cell => `"${cell}"`).join(','))
   ].join('\n');
 
-  downloadBlob(csvContent, 'text/csv;charset=utf-8;', `coastal_sentinel_detections_${Date.now()}.csv`);
+  downloadBlob(csvContent, 'text/csv;charset=utf-8;', `revenant_detections_${Date.now()}.csv`);
 }
 
 export function exportToGeoJSON(detections: VesselDetection[]) {
@@ -74,7 +74,7 @@ export function exportToGeoJSON(detections: VesselDetection[]) {
     }))
   };
 
-  downloadBlob(JSON.stringify(featureCollection, null, 2), 'application/json', `coastal_sentinel_detections_${Date.now()}.geojson`);
+  downloadBlob(JSON.stringify(featureCollection, null, 2), 'application/json', `revenant_detections_${Date.now()}.geojson`);
 }
 
 export function exportToKML(detections: VesselDetection[]) {
@@ -100,12 +100,12 @@ export function exportToKML(detections: VesselDetection[]) {
   const kmlContent = `<?xml version="1.0" encoding="UTF-8"?>
 <kml xmlns="http://www.opengis.net/kml/2.2">
   <Document>
-    <name>Coastal Sentinel Detections</name>
+    <name>REVENANT Detections</name>
     ${placemarks}
   </Document>
 </kml>`;
 
-  downloadBlob(kmlContent, 'application/vnd.google-earth.kml+xml', `coastal_sentinel_detections_${Date.now()}.kml`);
+  downloadBlob(kmlContent, 'application/vnd.google-earth.kml+xml', `revenant_detections_${Date.now()}.kml`);
 }
 
 function downloadBlob(content: string, mimeType: string, filename: string) {

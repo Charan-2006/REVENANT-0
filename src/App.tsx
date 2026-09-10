@@ -10,22 +10,28 @@ import {
   ZoneType,
   DispositionReasonCode,
   AlertState,
+  ActiveOverlay,
+  AppNotification,
 } from './types/maritime';
 import { INITIAL_RESTRICTED_AREAS } from './data/mockRestrictedAreas';
 import { evaluateVesselGeofence, detectGeofenceTransitions } from './utils/geofenceEngine';
 
 // UI Components
+import { Header } from './components/Header';
 import { MapView } from './components/MapView';
-import { LeftToolbar } from './components/LeftToolbar';
+import { LeftToolbar, ActiveSidebarPanel } from './components/LeftToolbar';
 import { CoordinateBar } from './components/CoordinateBar';
 import { VesselDetailCard } from './components/VesselDetailCard';
 import { CameraPopupCard } from './components/CameraPopupCard';
 import { CameraFeedModal } from './components/CameraFeedModal';
-import { MapLayersState } from './components/LayerControlPopover';
+import { LayerControlPopover, MapLayersState } from './components/LayerControlPopover';
+import { SensorPanel } from './components/SensorPanel';
+import { MOCK_CAMERAS } from './data/mockCameras';
 import { DrawingPrompt } from './components/DrawingPrompt';
 import { SaveAreaModal } from './components/SaveAreaModal';
 import { RestrictedAreaPopupCard } from './components/RestrictedAreaPopupCard';
-import { RestrictedAreaNotification } from './components/RestrictedAreaNotification';
+import { NotificationContainer } from './components/NotificationContainer';
+import { AlertDetailDrawer } from './components/AlertDetailDrawer';
 import { ZoneManagerPanel } from './components/ZoneManagerPanel';
 import { AlertCenter } from './components/AlertCenter';
 import { AuditLogDrawer } from './components/AuditLogDrawer';
@@ -50,6 +56,13 @@ export const App: React.FC = () => {
   const [restrictedAreas, setRestrictedAreas] = useState<RestrictedArea[]>(INITIAL_RESTRICTED_AREAS);
   const [selectedRestrictedArea, setSelectedRestrictedArea] = useState<RestrictedArea | null>(null);
 
+  // Centralized Active Floating Overlay System (Requirements 1, 3, 9, 14, 17)
+  const [activeOverlay, setActiveOverlay] = useState<ActiveOverlay>(null);
+  const [selectedAlert, setSelectedAlert] = useState<MaritimeAlert | null>(null);
+
+  // Queued Temporary Notifications (Requirements 5, 11, 12, 13)
+  const [notifications, setNotifications] = useState<AppNotification[]>([]);
+
   // Active Scenario Execution Banner
   const [activeScenarioBanner, setActiveScenarioBanner] = useState<{
     scenarioNum: number;
@@ -58,11 +71,8 @@ export const App: React.FC = () => {
     status: 'IN_PROGRESS' | 'COMPLETED';
   } | null>(null);
 
-  // Panel Open States
-  const [isZoneManagerOpen, setIsZoneManagerOpen] = useState(false);
-  const [isAlertCenterOpen, setIsAlertCenterOpen] = useState(false);
-  const [isAuditLogOpen, setIsAuditLogOpen] = useState(false);
-  const [isScenariosOpen, setIsScenariosOpen] = useState(false);
+  // Single Active Sidebar Panel State (Requirement 2 & 7)
+  const [activeSidebarPanel, setActiveSidebarPanel] = useState<ActiveSidebarPanel>(null);
 
   // Free-Draw mode state
   const [isDrawingRestricted, setIsDrawingRestricted] = useState(false);
@@ -215,8 +225,9 @@ export const App: React.FC = () => {
 
       newEvents.forEach((evt) => {
         if (evt.type === 'ENTRY') {
+          const alertId = `ALT-${Date.now().toString(36).toUpperCase().slice(-5)}`;
           const newAlert: MaritimeAlert = {
-            alertId: `ALT-${Date.now().toString(36).toUpperCase().slice(-5)}`,
+            alertId,
             timestamp: evt.timestamp,
             targetId: evt.vesselId,
             targetName: evt.vesselName,
@@ -231,6 +242,22 @@ export const App: React.FC = () => {
             currentState: 'ACTIVE',
           };
           setAlerts((prev) => [newAlert, ...prev]);
+
+          // Centralized notification queue item (Requirements 5, 11)
+          const newNotif: AppNotification = {
+            id: `NOTIF-${Date.now()}-${evt.vesselId}`,
+            type: 'RESTRICTED_ENTRY',
+            title: 'RESTRICTED AREA ENTRY',
+            targetId: evt.vesselId,
+            targetName: evt.vesselName,
+            zoneName: evt.areaName,
+            timestamp: evt.timestamp,
+            vesselId: evt.vesselId,
+            alertId,
+            severity: 'HIGH',
+            createdAt: Date.now(),
+          };
+          setNotifications((prev) => [newNotif, ...prev.slice(0, 2)]);
 
           addAuditLog({
             eventType: 'VESSEL_ENTERED_ZONE',
@@ -566,6 +593,55 @@ export const App: React.FC = () => {
   };
 
   // ---------------------------------------------------------------------------
+  // NOTIFICATION SELECTION & DISMISSAL (Requirements 2, 6, 7, 11, 12, 13, 14)
+  // ---------------------------------------------------------------------------
+  const handleSelectNotification = (notif: AppNotification) => {
+    // 1. Consume/remove clicked notification from temporary container
+    setNotifications((prev) => prev.filter((n) => n.id !== notif.id));
+    setLatestEvent(null);
+
+    // 2. Locate and select the target vessel
+    const targetVslId = notif.vesselId || notif.targetId;
+    const vsl = vessels.find((v) => v.id === targetVslId);
+    if (vsl) {
+      setSelectedVesselId(vsl.id);
+      flyToLocation(vsl.lat, vsl.lon, 10.5);
+    }
+
+    // 3. Resolve the matching maritime alert
+    const matchingAlert =
+      alerts.find(
+        (a) => (notif.alertId && a.alertId === notif.alertId) || a.targetId === targetVslId
+      ) || {
+        alertId: notif.alertId || `ALT-${Date.now().toString(36).toUpperCase().slice(-5)}`,
+        timestamp: notif.timestamp,
+        targetId: targetVslId,
+        targetName: notif.targetName,
+        status: (notif.title as any) || 'RESTRICTED AREA ENTRY',
+        priority: notif.severity === 'CRITICAL' ? 'CRITICAL' : 'HIGH',
+        suggestedAction: 'INVESTIGATE',
+        evidence: {
+          source: 'Turf.js Geofence Engine',
+          zoneName: notif.zoneName || 'RESTRICTED AREA 01',
+          details: `Contact crossed perimeter into ${notif.zoneName || 'RESTRICTED AREA 01'}`,
+        },
+        currentState: 'ACTIVE',
+      };
+
+    setSelectedAlert(matchingAlert);
+    setSelectedCamera(null);
+    setSelectedRestrictedArea(null);
+
+    // 4. Panel Replacement Rule: Close any open header dropdown or other floating panel and open Alert Detail Drawer
+    setActiveOverlay('alert');
+  };
+
+  const handleDismissNotification = (notifId: string) => {
+    setNotifications((prev) => prev.filter((n) => n.id !== notifId));
+    setLatestEvent(null);
+  };
+
+  // ---------------------------------------------------------------------------
   // DEMO SCENARIOS RUNNER (Scenarios 1–7)
   // Complete deterministic multi-step executions matching competition specifications
   // ---------------------------------------------------------------------------
@@ -666,6 +742,21 @@ export const App: React.FC = () => {
               ...prev,
             ];
           });
+
+          // Queue Dark Vessel notification for temporary container (Requirements 5, 11)
+          const darkNotif: AppNotification = {
+            id: `NOTIF-${Date.now()}-DV-104`,
+            type: 'DARK_VESSEL',
+            title: 'DARK VESSEL DETECTED',
+            targetId: 'DV-104',
+            targetName: 'UNIDENTIFIED CONTACT 104',
+            timestamp: new Date().toISOString().slice(11, 19) + ' UTC',
+            vesselId: 'DV-104',
+            alertId: 'ALT-101',
+            severity: 'CRITICAL',
+            createdAt: Date.now(),
+          };
+          setNotifications((prev) => [darkNotif, ...prev.slice(0, 2)]);
 
           addAuditLog({
             eventType: 'ALERT_CREATED',
@@ -902,7 +993,8 @@ export const App: React.FC = () => {
 
       case 7: {
         // SCENARIO 7: Operator Alert Disposition Workflow
-        setIsAlertCenterOpen(true);
+        setActiveSidebarPanel('events');
+        setActiveOverlay(null);
         setActiveScenarioBanner({
           scenarioNum: 7,
           title: 'Scenario 7: Operator Alert Disposition Workflow',
@@ -925,8 +1017,19 @@ export const App: React.FC = () => {
   const activeAlertCount = alerts.filter((a) => a.currentState === 'ACTIVE').length;
 
   return (
-    <div className="relative w-screen h-screen bg-slate-100 text-slate-900 antialiased overflow-hidden font-sans select-none">
-      {/* Floating Demo Scenario Execution Banner */}
+    <div className="relative w-screen h-screen bg-slate-100 text-slate-900 antialiased overflow-hidden font-sans select-none flex flex-col">
+      <Header
+        activeAlertCount={activeAlertCount}
+        onOpenAlerts={() => {
+          setActiveSidebarPanel(activeSidebarPanel === 'events' ? null : 'events');
+          setActiveOverlay(null);
+        }}
+        systemStatus="ONLINE"
+        activeOverlay={activeOverlay}
+        onToggleOverlay={setActiveOverlay}
+      />
+      <div className="relative w-full flex-1 overflow-hidden">
+        {/* Floating Demo Scenario Execution Banner */}
       {activeScenarioBanner && (
         <div className="absolute top-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 px-4 py-2.5 bg-white/95 border border-cyan-500/50 rounded-xl shadow-xl backdrop-blur-md max-w-xl text-xs text-slate-800">
           <div className="flex items-center gap-2">
@@ -963,9 +1066,29 @@ export const App: React.FC = () => {
         selectedCamera={selectedCamera}
         onSelectVessel={(vessel) => {
           setSelectedVesselId(vessel ? vessel.id : null);
+          if (vessel) {
+            setSelectedCamera(null);
+            setSelectedRestrictedArea(null);
+            setSelectedAlert(null);
+            setActiveOverlay('vesselDetail');
+          } else {
+            if (activeOverlay === 'vesselDetail' || activeOverlay === 'alert') {
+              setActiveOverlay(null);
+            }
+          }
         }}
         onSelectCamera={(cam) => {
           setSelectedCamera(cam);
+          if (cam) {
+            setSelectedVesselId(null);
+            setSelectedRestrictedArea(null);
+            setSelectedAlert(null);
+            setActiveOverlay('cameraDetail');
+          } else {
+            if (activeOverlay === 'cameraDetail') {
+              setActiveOverlay(null);
+            }
+          }
         }}
         onCursorMove={setCursorPos}
         onZoomChange={setCurrentZoom}
@@ -973,7 +1096,19 @@ export const App: React.FC = () => {
         layers={layers}
         restrictedAreas={restrictedAreas}
         selectedRestrictedArea={selectedRestrictedArea}
-        onSelectRestrictedArea={(area) => setSelectedRestrictedArea(area)}
+        onSelectRestrictedArea={(area) => {
+          setSelectedRestrictedArea(area);
+          if (area) {
+            setSelectedVesselId(null);
+            setSelectedCamera(null);
+            setSelectedAlert(null);
+            setActiveOverlay('zoneDetail');
+          } else {
+            if (activeOverlay === 'zoneDetail') {
+              setActiveOverlay(null);
+            }
+          }
+        }}
         isDrawingRestricted={isDrawingRestricted}
         pendingPolygonCoords={pendingPolygonCoords}
         onDrawingComplete={handleDrawingComplete}
@@ -996,14 +1131,170 @@ export const App: React.FC = () => {
         isSimulating={isSimulating}
         onToggleSimulation={() => setIsSimulating(!isSimulating)}
         activeAlertCount={activeAlertCount}
-        onToggleAlerts={() => setIsAlertCenterOpen(!isAlertCenterOpen)}
-        isAlertsOpen={isAlertCenterOpen}
-        onToggleZones={() => setIsZoneManagerOpen(!isZoneManagerOpen)}
-        isZonesOpen={isZoneManagerOpen}
-        onToggleAudit={() => setIsAuditLogOpen(!isAuditLogOpen)}
-        isAuditOpen={isAuditLogOpen}
-        onToggleScenarios={() => setIsScenariosOpen(!isScenariosOpen)}
-        isScenariosOpen={isScenariosOpen}
+        activePanel={activeSidebarPanel}
+        onTogglePanel={setActiveSidebarPanel}
+      />
+
+      {/* 1. SINGLE ACTIVE SIDEBAR PANEL SYSTEM (Requirements 1–7) */}
+      {/* Areas: Zone Manager Panel */}
+      <ZoneManagerPanel
+        isOpen={activeSidebarPanel === 'areas'}
+        onClose={() => setActiveSidebarPanel(null)}
+        areas={restrictedAreas}
+        onToggleStatus={handleToggleAreaStatus}
+        onDeleteArea={handleDeleteArea}
+        onEditArea={handleEditArea}
+        onStartDrawing={handleToggleDrawRestricted}
+        onLoadGeoJSONZones={handleLoadGeoJSONZones}
+        onFlyToArea={(area) => {
+          const coords = area.geometry.coordinates[0];
+          if (coords && coords.length > 0) {
+            flyToLocation(coords[0][1], coords[0][0], 10.5);
+          }
+          setSelectedRestrictedArea(area);
+          setSelectedVesselId(null);
+          setSelectedCamera(null);
+          setSelectedAlert(null);
+          setActiveOverlay('zoneDetail');
+        }}
+      />
+
+      {/* Events: Operational Alert Center */}
+      <AlertCenter
+        isOpen={activeSidebarPanel === 'events'}
+        onClose={() => setActiveSidebarPanel(null)}
+        alerts={alerts}
+        onDispositAlert={handleDispositAlert}
+        onSelectTarget={(targetId) => {
+          const vsl = vessels.find((v) => v.id === targetId);
+          if (vsl) {
+            flyToLocation(vsl.lat, vsl.lon, 10.5);
+            setSelectedVesselId(vsl.id);
+            setSelectedCamera(null);
+            setSelectedRestrictedArea(null);
+            const matchingAlert = alerts.find((a) => a.targetId === targetId);
+            if (matchingAlert) {
+              setSelectedAlert(matchingAlert);
+              setActiveOverlay('alert');
+            } else {
+              setActiveOverlay('vesselDetail');
+            }
+          }
+        }}
+      />
+
+      {/* Sensors: Sensor Network & 87 EO Stations */}
+      <SensorPanel
+        isOpen={activeSidebarPanel === 'sensors'}
+        onClose={() => setActiveSidebarPanel(null)}
+        cameras={MOCK_CAMERAS as EOCamera[]}
+        onSelectCamera={(cam) => {
+          flyToLocation(cam.lat, cam.lon, 11);
+          setSelectedCamera(cam);
+          setSelectedVesselId(null);
+          setSelectedRestrictedArea(null);
+          setSelectedAlert(null);
+          setActiveOverlay('cameraDetail');
+        }}
+        onViewFeed={(cam) => setActiveFeedCamera(cam)}
+      />
+
+      {/* Filters: Maritime GIS Layers & Filters */}
+      <LayerControlPopover
+        isOpen={activeSidebarPanel === 'filters'}
+        onClose={() => setActiveSidebarPanel(null)}
+        layers={layers}
+        onToggleLayer={handleToggleLayer}
+      />
+
+      {/* Scenarios: Demo Scenarios Runner (1–7) */}
+      <DemoScenariosModal
+        isOpen={activeSidebarPanel === 'scenarios'}
+        onClose={() => setActiveSidebarPanel(null)}
+        onRunScenario={handleRunScenario}
+      />
+
+      {/* Audit: Append-Only Immutable Audit Trail */}
+      <AuditLogDrawer
+        isOpen={activeSidebarPanel === 'audit'}
+        onClose={() => setActiveSidebarPanel(null)}
+        auditLogs={auditLogs}
+      />
+
+      {/* 2. OBJECT DETAIL PANELS (RIGHT-SIDE DETAIL DRAWER - Requirements 1, 4, 8, 14) */}
+      {/* Alert Detail Drawer (Requirement 8) */}
+      <AlertDetailDrawer
+        isOpen={activeOverlay === 'alert'}
+        onClose={() => {
+          setActiveOverlay(null);
+          setSelectedAlert(null);
+        }}
+        alert={selectedAlert}
+        vessel={selectedVessel}
+        onDispositAlert={handleDispositAlert}
+        onViewVesselTelemetry={(vslId) => {
+          setSelectedVesselId(vslId);
+          setActiveOverlay('vesselDetail');
+        }}
+        onSimulateAisMatch={handleSimulateAisMatch}
+      />
+
+      {/* Selected Vessel Contextual Card */}
+      <VesselDetailCard
+        vessel={activeOverlay === 'vesselDetail' ? selectedVessel : null}
+        onClose={() => {
+          setActiveOverlay(null);
+          setSelectedVesselId(null);
+        }}
+        onSimulateAisMatch={handleSimulateAisMatch}
+        onViewAlert={(vslId) => {
+          const matchingAlert = alerts.find((a) => a.targetId === vslId);
+          if (matchingAlert) {
+            setSelectedAlert(matchingAlert);
+          }
+          setActiveOverlay('alert');
+        }}
+      />
+
+      {/* Selected Camera Contextual Card */}
+      <CameraPopupCard
+        camera={activeOverlay === 'cameraDetail' ? selectedCamera : null}
+        onClose={() => {
+          setActiveOverlay(null);
+          setSelectedCamera(null);
+        }}
+        onViewEo={(cam) => setActiveFeedCamera(cam)}
+        vessels={evaluatedVessels}
+      />
+
+      {/* Selected Restricted Area Contextual Card */}
+      <RestrictedAreaPopupCard
+        area={activeOverlay === 'zoneDetail' ? selectedRestrictedArea : null}
+        vessels={evaluatedVessels}
+        onClose={() => {
+          setActiveOverlay(null);
+          setSelectedRestrictedArea(null);
+        }}
+        onToggleStatus={handleToggleAreaStatus}
+        onDeleteArea={handleDeleteArea}
+      />
+
+      {/* 3. CENTERED MODALS (Requirement 10) */}
+      {/* Save Restricted Area Confirmation Modal */}
+      <SaveAreaModal
+        isOpen={isSaveModalOpen}
+        defaultName={`RESTRICTED AREA ${(restrictedAreas.length + 1).toString().padStart(2, '0')}`}
+        onSave={handleSaveArea}
+        onCancel={() => {
+          setIsSaveModalOpen(false);
+          setPendingPolygonCoords(null);
+        }}
+      />
+
+      {/* Contextual EO Observation Feed Modal */}
+      <CameraFeedModal
+        camera={activeFeedCamera}
+        onClose={() => setActiveFeedCamera(null)}
       />
 
       {/* Drawing Mode Status & Close Prompt */}
@@ -1018,114 +1309,21 @@ export const App: React.FC = () => {
         onCancel={handleDrawingCancel}
       />
 
-      {/* Save Restricted Area Confirmation Modal (with ZoneType & Expiry) */}
-      <SaveAreaModal
-        isOpen={isSaveModalOpen}
-        defaultName={`RESTRICTED AREA ${(restrictedAreas.length + 1).toString().padStart(2, '0')}`}
-        onSave={handleSaveArea}
-        onCancel={() => {
-          setIsSaveModalOpen(false);
-          setPendingPolygonCoords(null);
-        }}
+      {/* Dedicated Contextual Notification Container (Requirements 5, 11, 12, 13) */}
+      <NotificationContainer
+        notifications={notifications}
+        onSelectNotification={handleSelectNotification}
+        onDismissNotification={handleDismissNotification}
       />
 
-      {/* Zone Manager Panel (Red, Yellow, Green Zones, Auto-Expiry, Delete) */}
-      <ZoneManagerPanel
-        isOpen={isZoneManagerOpen}
-        onClose={() => setIsZoneManagerOpen(false)}
-        areas={restrictedAreas}
-        onToggleStatus={handleToggleAreaStatus}
-        onDeleteArea={handleDeleteArea}
-        onEditArea={handleEditArea}
-        onStartDrawing={handleToggleDrawRestricted}
-        onLoadGeoJSONZones={handleLoadGeoJSONZones}
-        onFlyToArea={(area) => {
-          const coords = area.geometry.coordinates[0];
-          if (coords && coords.length > 0) {
-            flyToLocation(coords[0][1], coords[0][0], 10.5);
-          }
-        }}
-      />
-
-      {/* Selected Restricted Area Contextual Popup Card */}
-      <RestrictedAreaPopupCard
-        area={selectedRestrictedArea}
-        vessels={evaluatedVessels}
-        onClose={() => setSelectedRestrictedArea(null)}
-        onToggleStatus={handleToggleAreaStatus}
-        onDeleteArea={handleDeleteArea}
-      />
-
-      {/* Operational Alert Engine & Disposition Center */}
-      <AlertCenter
-        isOpen={isAlertCenterOpen}
-        onClose={() => setIsAlertCenterOpen(false)}
-        alerts={alerts}
-        onDispositAlert={handleDispositAlert}
-        onSelectTarget={(targetId) => {
-          const vsl = vessels.find((v) => v.id === targetId);
-          if (vsl) {
-            flyToLocation(vsl.lat, vsl.lon, 10.5);
-            setSelectedVesselId(vsl.id);
-          }
-        }}
-      />
-
-      {/* Append-Only Immutable Audit Trail Drawer */}
-      <AuditLogDrawer
-        isOpen={isAuditLogOpen}
-        onClose={() => setIsAuditLogOpen(false)}
-        auditLogs={auditLogs}
-      />
-
-      {/* Demo Scenarios Runner (Scenarios 1–7) */}
-      <DemoScenariosModal
-        isOpen={isScenariosOpen}
-        onClose={() => setIsScenariosOpen(false)}
-        onRunScenario={handleRunScenario}
-      />
-
-      {/* Contextual Geofence Event Notification Toast */}
-      <RestrictedAreaNotification
-        latestEvent={latestEvent}
-        onDismiss={() => setLatestEvent(null)}
-        onSelectVessel={(vslId) => {
-          const vsl = vessels.find((v) => v.id === vslId);
-          if (vsl) {
-            flyToLocation(vsl.lat, vsl.lon, 10.5);
-            setSelectedVesselId(vsl.id);
-          }
-        }}
-      />
-
-      {/* Selected Camera Contextual Popup */}
-      <CameraPopupCard
-        camera={selectedCamera}
-        onClose={() => setSelectedCamera(null)}
-        onViewEo={(cam) => setActiveFeedCamera(cam)}
-        vessels={evaluatedVessels}
-      />
-
-      {/* Selected Vessel Contextual Card (with Dynamic AIS Re-Correlation) */}
-      <VesselDetailCard
-        vessel={selectedVessel}
-        onClose={() => setSelectedVesselId(null)}
-        onSimulateAisMatch={handleSimulateAisMatch}
-      />
-
-      {/* Contextual EO Observation Feed Modal */}
-      <CameraFeedModal
-        camera={activeFeedCamera}
-        onClose={() => setActiveFeedCamera(null)}
-      />
-
-      {/* Geographic Coordinate HUD, Feed Health & Maritime Legend */}
-      <CoordinateBar
-        cursorPos={cursorPos}
-        zoom={currentZoom}
-        onToggleLegend={() => setIsLegendOpen(!isLegendOpen)}
-        isLegendOpen={isLegendOpen}
-      />
+        {/* Geographic Coordinate HUD, Feed Health & Maritime Legend */}
+        <CoordinateBar
+          cursorPos={cursorPos}
+          zoom={currentZoom}
+          onToggleLegend={() => setIsLegendOpen(!isLegendOpen)}
+          isLegendOpen={isLegendOpen}
+        />
+      </div>
     </div>
   );
 };

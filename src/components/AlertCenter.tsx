@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { SidebarPanel } from './SidebarPanel';
 import { MaritimeAlert, DispositionReasonCode } from '../types/maritime';
 import { X, AlertTriangle, ShieldAlert, CheckCircle, Flame, Eye, Compass } from 'lucide-react';
 
@@ -54,26 +55,13 @@ export const AlertCenter: React.FC<AlertCenterProps> = ({
   const activeAlerts = alerts.filter((a) => a.currentState === 'ACTIVE');
 
   return (
-    <aside
-      aria-label="Maritime Alert Operations Center"
-      className="absolute top-14 right-14 z-30 w-92 bg-white/95 backdrop-blur-md border border-slate-200 rounded-lg shadow-2xl text-slate-800 overflow-hidden font-sans select-none animate-in fade-in duration-200"
+    <SidebarPanel
+      isOpen={isOpen}
+      onClose={onClose}
+      title="Operational Alert Engine"
+      badge={`${activeAlerts.length} ACTIVE`}
+      icon={<AlertTriangle className="w-4 h-4 text-rose-600" />}
     >
-      {/* Header */}
-      <div className="flex items-center justify-between px-3.5 py-2 bg-slate-50 border-b border-slate-200 text-slate-900">
-        <div className="flex items-center gap-2">
-          <div className="w-2 h-2 rounded-full bg-rose-500 animate-ping" />
-          <span className="text-[11px] font-bold tracking-wider uppercase">
-            Operational Alert Engine ({activeAlerts.length} Active)
-          </span>
-        </div>
-        <button
-          onClick={onClose}
-          className="p-1 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
-          title="Close Alert Center"
-        >
-          <X className="w-3.5 h-3.5" />
-        </button>
-      </div>
 
       {/* Disposition Modal Overlay */}
       {selectedAlertForAction && (
@@ -259,6 +247,6 @@ export const AlertCenter: React.FC<AlertCenterProps> = ({
           })
         )}
       </div>
-    </aside>
+    </SidebarPanel>
   );
 };

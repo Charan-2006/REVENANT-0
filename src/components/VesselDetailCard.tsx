@@ -1,4 +1,5 @@
 import React from 'react';
+import { DetailDrawer } from './DetailDrawer';
 import { Vessel } from '../data/vessels';
 import { MOCK_CAMERAS } from '../data/mockCameras';
 import { isPointInFov, getDistanceMeters } from '../utils/geoUtils';
@@ -10,12 +11,14 @@ interface VesselDetailCardProps {
   vessel: Vessel | null;
   onClose: () => void;
   onSimulateAisMatch?: (vesselId: string) => void;
+  onViewAlert?: (vesselId: string) => void;
 }
 
 export const VesselDetailCard: React.FC<VesselDetailCardProps> = ({
   vessel,
   onClose,
   onSimulateAisMatch,
+  onViewAlert,
 }) => {
   if (!vessel) return null;
 
@@ -43,42 +46,46 @@ export const VesselDetailCard: React.FC<VesselDetailCardProps> = ({
     ? (getDistanceMeters(assocCamera.lon, assocCamera.lat, vessel.lon, vessel.lat) / 1000).toFixed(1)
     : null;
 
+  const headerTitle =
+    vessel.displayStatus === 'RESTRICTED'
+      ? 'Restricted Alert'
+      : isDark
+      ? 'Dark Vessel'
+      : 'Correlated Vessel';
+
+  const headerBg =
+    vessel.displayStatus === 'RESTRICTED'
+      ? 'bg-orange-50'
+      : isDark
+      ? 'bg-rose-50'
+      : 'bg-slate-50';
+
+  const headerBorder =
+    vessel.displayStatus === 'RESTRICTED'
+      ? 'border-orange-200'
+      : isDark
+      ? 'border-rose-200'
+      : 'border-slate-200';
+
+  const headerIcon =
+    vessel.displayStatus === 'RESTRICTED' ? (
+      <ShieldAlert className="w-4 h-4 text-orange-600" />
+    ) : isDark ? (
+      <ShieldAlert className="w-4 h-4 text-rose-600" />
+    ) : (
+      <Anchor className="w-4 h-4 text-sky-600" />
+    );
+
   return (
-    <aside aria-label="Selected Vessel Maritime Context" className="absolute top-4 right-4 z-20 w-72 bg-white/95 backdrop-blur-md border border-slate-200 rounded-lg shadow-xl text-slate-800 overflow-hidden font-sans select-none animate-in fade-in duration-200">
-      {/* Header Bar */}
-      <div
-        className={`flex items-center justify-between px-3 py-2 border-b ${
-          vessel.displayStatus === 'RESTRICTED'
-            ? 'bg-orange-50 border-orange-200'
-            : isDark
-            ? 'bg-rose-50 border-rose-200'
-            : 'bg-slate-50 border-slate-200'
-        }`}
-      >
-        <div className="flex items-center gap-2">
-          {vessel.displayStatus === 'RESTRICTED' ? (
-            <ShieldAlert className="w-4 h-4 text-orange-600" />
-          ) : isDark ? (
-            <ShieldAlert className="w-4 h-4 text-rose-600" />
-          ) : (
-            <Anchor className="w-4 h-4 text-sky-600" />
-          )}
-          <span className="text-[11px] font-bold tracking-wider uppercase text-slate-900">
-            {vessel.displayStatus === 'RESTRICTED'
-              ? 'Restricted Area Geofence Alert'
-              : isDark
-              ? 'Dark Vessel Detection'
-              : 'AIS Correlated Vessel'}
-          </span>
-        </div>
-        <button
-          onClick={onClose}
-          className="p-1 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
-          title="Close card"
-        >
-          <X className="w-3.5 h-3.5" />
-        </button>
-      </div>
+    <DetailDrawer
+      isOpen={!!vessel}
+      onClose={onClose}
+      title={headerTitle}
+      badge={vessel.id}
+      icon={headerIcon}
+      headerBg={headerBg}
+      headerBorder={headerBorder}
+    >
 
       {/* Content Body */}
       <div className="p-3 space-y-2.5 text-[11px]">
@@ -111,6 +118,19 @@ export const VesselDetailCard: React.FC<VesselDetailCardProps> = ({
                   {isDark ? 'DARK VESSEL' : 'AIS CORRELATED'}
                 </span>
               </div>
+              {onViewAlert && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onViewAlert(vessel.id);
+                  }}
+                  className="w-full mt-2 py-1 px-2 bg-orange-600 hover:bg-orange-500 text-white rounded font-bold text-[9.5px] flex items-center justify-center gap-1 shadow-xs transition-all active:scale-98"
+                >
+                  <ShieldAlert className="w-3 h-3" />
+                  <span>VIEW ALERT DETAILS & DISPOSITION</span>
+                </button>
+              )}
             </div>
           </div>
         )}
@@ -267,9 +287,9 @@ export const VesselDetailCard: React.FC<VesselDetailCardProps> = ({
         {/* Attribution Footnote */}
         <div className="pt-1 text-[8.5px] text-slate-400 flex items-center justify-between border-t border-slate-200">
           <span>Feed: {isDark ? 'EO Optical Detection' : 'AIS Live Stream'}</span>
-          <span className="text-sky-600 font-medium">Coastal View</span>
+          <span className="text-sky-600 font-medium">REVENANT</span>
         </div>
       </div>
-    </aside>
+    </DetailDrawer>
   );
 };

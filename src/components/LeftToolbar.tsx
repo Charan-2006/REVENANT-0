@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import {
   Plus,
   Minus,
@@ -13,10 +13,13 @@ import {
   AlertTriangle,
   ShieldCheck,
   Sliders,
+  Radio,
 } from 'lucide-react';
-import { LayerControlPopover, MapLayersState } from './LayerControlPopover';
+import { MapLayersState } from './LayerControlPopover';
 
-interface LeftToolbarProps {
+export type ActiveSidebarPanel = 'areas' | 'events' | 'sensors' | 'filters' | 'audit' | 'scenarios' | null;
+
+export interface LeftToolbarProps {
   onZoomIn: () => void;
   onZoomOut: () => void;
   onLocateIndia: () => void;
@@ -28,14 +31,8 @@ interface LeftToolbarProps {
   isSimulating?: boolean;
   onToggleSimulation?: () => void;
   activeAlertCount?: number;
-  onToggleAlerts?: () => void;
-  isAlertsOpen?: boolean;
-  onToggleZones?: () => void;
-  isZonesOpen?: boolean;
-  onToggleAudit?: () => void;
-  isAuditOpen?: boolean;
-  onToggleScenarios?: () => void;
-  isScenariosOpen?: boolean;
+  activePanel: ActiveSidebarPanel;
+  onTogglePanel: (panel: ActiveSidebarPanel) => void;
 }
 
 export const LeftToolbar: React.FC<LeftToolbarProps> = ({
@@ -50,17 +47,9 @@ export const LeftToolbar: React.FC<LeftToolbarProps> = ({
   isSimulating = false,
   onToggleSimulation,
   activeAlertCount = 0,
-  onToggleAlerts,
-  isAlertsOpen = false,
-  onToggleZones,
-  isZonesOpen = false,
-  onToggleAudit,
-  isAuditOpen = false,
-  onToggleScenarios,
-  isScenariosOpen = false,
+  activePanel,
+  onTogglePanel,
 }) => {
-  const [isLayersOpen, setIsLayersOpen] = useState(false);
-
   return (
     <div className="absolute left-3.5 top-3.5 z-20 flex flex-col items-start gap-2 select-none">
       {/* Zoom, Navigation & GIS Controls */}
@@ -105,7 +94,7 @@ export const LeftToolbar: React.FC<LeftToolbarProps> = ({
           <Crosshair className="w-4 h-4" />
         </button>
 
-        {/* Vessel Toggle Button: Vessel shape with AIS Correlated (navy) & Dark Vessel (red) */}
+        {/* Vessel Toggle Button */}
         <button
           onClick={() => onToggleLayer('vessels')}
           className={`w-[34px] h-[34px] flex items-center justify-center transition-all ${
@@ -117,7 +106,6 @@ export const LeftToolbar: React.FC<LeftToolbarProps> = ({
           aria-label="Toggle All Vessels"
         >
           <svg className="w-4 h-4" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-            {/* AIS Correlated ship silhouette */}
             <path
               d="M6 1.5 L9.5 5 L9.5 13 L2.5 13 L2.5 5 Z"
               fill={layers.vessels ? '#0f172a' : '#94a3b8'}
@@ -125,7 +113,6 @@ export const LeftToolbar: React.FC<LeftToolbarProps> = ({
               strokeWidth="0.6"
               strokeLinejoin="round"
             />
-            {/* Dark vessel detection ship silhouette */}
             <path
               d="M11.5 4.5 L14.5 7.5 L14.5 14.5 L8.5 14.5 L8.5 7.5 Z"
               fill={layers.vessels ? '#dc2626' : '#cbd5e1'}
@@ -136,7 +123,7 @@ export const LeftToolbar: React.FC<LeftToolbarProps> = ({
           </svg>
         </button>
 
-        {/* Camera Toggle Button: Shows all 87 DGLL coastal cameras across India */}
+        {/* Camera Toggle Button */}
         <button
           onClick={() => onToggleLayer('cameras')}
           className={`w-[34px] h-[34px] flex items-center justify-center transition-all ${
@@ -150,7 +137,7 @@ export const LeftToolbar: React.FC<LeftToolbarProps> = ({
           <Camera className="w-4 h-4" />
         </button>
 
-        {/* Draw Restricted Area (Requirement 1) */}
+        {/* Draw Restricted Area */}
         <button
           onClick={onToggleDrawRestricted}
           className={`w-[34px] h-[34px] flex items-center justify-center transition-all ${
@@ -164,87 +151,95 @@ export const LeftToolbar: React.FC<LeftToolbarProps> = ({
           <Pentagon className="w-4 h-4" />
         </button>
 
-        {/* Zone Manager Button */}
-        {onToggleZones && (
-          <button
-            onClick={onToggleZones}
-            className={`w-[34px] h-[34px] flex items-center justify-center transition-all ${
-              isZonesOpen
-                ? 'bg-orange-50 text-orange-600 shadow-inner'
-                : 'text-slate-700 hover:bg-slate-100 hover:text-orange-600'
-            }`}
-            title="Manage Maritime Geofence Zones (Red, Yellow, Green)"
-            aria-label="Manage Geofence Zones"
-          >
-            <ShieldAlert className="w-4 h-4" />
-          </button>
-        )}
-
-        {/* Operational Alert Center Button */}
-        {onToggleAlerts && (
-          <button
-            onClick={onToggleAlerts}
-            className={`relative w-[34px] h-[34px] flex items-center justify-center transition-all ${
-              isAlertsOpen
-                ? 'bg-rose-50 text-rose-600 shadow-inner'
-                : 'text-slate-700 hover:bg-slate-100 hover:text-rose-600'
-            }`}
-            title="Operational Alert Center (Disposition Engine)"
-            aria-label="Alert Operations Center"
-          >
-            <AlertTriangle className="w-4 h-4" />
-            {activeAlertCount > 0 && (
-              <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-rose-600 animate-ping" />
-            )}
-          </button>
-        )}
-
-        {/* Append-Only Audit Trail Button */}
-        {onToggleAudit && (
-          <button
-            onClick={onToggleAudit}
-            className={`w-[34px] h-[34px] flex items-center justify-center transition-all ${
-              isAuditOpen
-                ? 'bg-emerald-50 text-emerald-600 shadow-inner'
-                : 'text-slate-700 hover:bg-slate-100 hover:text-emerald-600'
-            }`}
-            title="Append-Only Audit Log (Immutable Event Trail)"
-            aria-label="Audit Log"
-          >
-            <ShieldCheck className="w-4 h-4" />
-          </button>
-        )}
-
-        {/* Demo Scenarios Runner Button */}
-        {onToggleScenarios && (
-          <button
-            onClick={onToggleScenarios}
-            className={`w-[34px] h-[34px] flex items-center justify-center transition-all ${
-              isScenariosOpen
-                ? 'bg-sky-50 text-sky-600 shadow-inner'
-                : 'text-slate-700 hover:bg-slate-100 hover:text-sky-600'
-            }`}
-            title="Demo Scenarios (Scenarios 1–7 Evaluation Runner)"
-            aria-label="Demonstration Scenarios"
-          >
-            <Sliders className="w-4 h-4" />
-          </button>
-        )}
-
-        {/* Maritime Layers Toggle */}
+        {/* 1. AREAS PANEL (Maritime Geofence Zones) */}
         <button
-          onClick={() => setIsLayersOpen(!isLayersOpen)}
-          className={`w-[34px] h-[34px] flex items-center justify-center transition-colors ${
-            isLayersOpen ? 'bg-sky-50 text-sky-600' : 'text-slate-700 hover:bg-slate-100 hover:text-slate-900'
+          onClick={() => onTogglePanel(activePanel === 'areas' ? null : 'areas')}
+          className={`w-[34px] h-[34px] flex items-center justify-center transition-all ${
+            activePanel === 'areas'
+              ? 'bg-orange-50 text-orange-600 shadow-inner ring-1 ring-orange-400'
+              : 'text-slate-700 hover:bg-slate-100 hover:text-orange-600'
           }`}
-          title="Toggle Maritime Boundaries & Layers"
-          aria-label="Toggle Layers"
+          title="Areas: Manage Maritime Geofence Zones"
+          aria-label="Areas Panel"
+        >
+          <ShieldAlert className="w-4 h-4" />
+        </button>
+
+        {/* 2. EVENTS PANEL (Alert Center) */}
+        <button
+          onClick={() => onTogglePanel(activePanel === 'events' ? null : 'events')}
+          className={`relative w-[34px] h-[34px] flex items-center justify-center transition-all ${
+            activePanel === 'events'
+              ? 'bg-rose-50 text-rose-600 shadow-inner ring-1 ring-rose-400'
+              : 'text-slate-700 hover:bg-slate-100 hover:text-rose-600'
+          }`}
+          title="Events: Operational Alert Center"
+          aria-label="Events Panel"
+        >
+          <AlertTriangle className="w-4 h-4" />
+          {activeAlertCount > 0 && (
+            <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-rose-600 animate-ping" />
+          )}
+        </button>
+
+        {/* 3. SENSORS PANEL (Sensor Network & 87 EO Sites) */}
+        <button
+          onClick={() => onTogglePanel(activePanel === 'sensors' ? null : 'sensors')}
+          className={`w-[34px] h-[34px] flex items-center justify-center transition-all ${
+            activePanel === 'sensors'
+              ? 'bg-sky-50 text-sky-600 shadow-inner ring-1 ring-sky-400'
+              : 'text-slate-700 hover:bg-slate-100 hover:text-sky-600'
+          }`}
+          title="Sensors: Network Status & Coastal EO Sensor Stations"
+          aria-label="Sensors Panel"
+        >
+          <Radio className="w-4 h-4" />
+        </button>
+
+        {/* 4. FILTERS & LAYERS PANEL */}
+        <button
+          onClick={() => onTogglePanel(activePanel === 'filters' ? null : 'filters')}
+          className={`w-[34px] h-[34px] flex items-center justify-center transition-all ${
+            activePanel === 'filters'
+              ? 'bg-sky-50 text-sky-600 shadow-inner ring-1 ring-sky-400'
+              : 'text-slate-700 hover:bg-slate-100 hover:text-slate-900'
+          }`}
+          title="Filters: Maritime GIS Boundaries & Overlays"
+          aria-label="Filters Panel"
         >
           <LayersIcon className="w-4 h-4" />
         </button>
+
+        {/* 5. SCENARIOS PANEL (Demo Scenarios 1–7) */}
+        <button
+          onClick={() => onTogglePanel(activePanel === 'scenarios' ? null : 'scenarios')}
+          className={`w-[34px] h-[34px] flex items-center justify-center transition-all ${
+            activePanel === 'scenarios'
+              ? 'bg-sky-50 text-sky-600 shadow-inner ring-1 ring-sky-400'
+              : 'text-slate-700 hover:bg-slate-100 hover:text-sky-600'
+          }`}
+          title="Scenarios: Surveillance Track Evaluation Runner (1–7)"
+          aria-label="Scenarios Panel"
+        >
+          <Sliders className="w-4 h-4" />
+        </button>
+
+        {/* 6. AUDIT PANEL (Append-Only Audit Trail) */}
+        <button
+          onClick={() => onTogglePanel(activePanel === 'audit' ? null : 'audit')}
+          className={`w-[34px] h-[34px] flex items-center justify-center transition-all ${
+            activePanel === 'audit'
+              ? 'bg-emerald-50 text-emerald-600 shadow-inner ring-1 ring-emerald-400'
+              : 'text-slate-700 hover:bg-slate-100 hover:text-emerald-600'
+          }`}
+          title="Audit: Append-Only Immutable Event Trail"
+          aria-label="Audit Panel"
+        >
+          <ShieldCheck className="w-4 h-4" />
+        </button>
       </div>
 
-      {/* Demo Scenario Simulation Play/Pause (Requirement 26) */}
+      {/* Demo Scenario Simulation Play/Pause */}
       {onToggleSimulation && (
         <button
           onClick={onToggleSimulation}
@@ -258,15 +253,6 @@ export const LeftToolbar: React.FC<LeftToolbarProps> = ({
         >
           {isSimulating ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5 ml-0.5" />}
         </button>
-      )}
-
-      {/* Layer Control Popover */}
-      {isLayersOpen && (
-        <LayerControlPopover
-          layers={layers}
-          onToggleLayer={onToggleLayer}
-          onClose={() => setIsLayersOpen(false)}
-        />
       )}
     </div>
   );

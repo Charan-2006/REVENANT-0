@@ -1,7 +1,7 @@
 const { booleanPointInPolygon, point, polygon } = require('@turf/turf');
 
 console.log('====================================================');
-console.log('RUNNING COASTAL VIEW COMPREHENSIVE RUNTIME ENGINE VERIFICATION');
+console.log('RUNNING REVENANT COMPREHENSIVE RUNTIME ENGINE VERIFICATION');
 console.log('====================================================\n');
 
 // 1. Load data

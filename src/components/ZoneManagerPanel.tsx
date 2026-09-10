@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { SidebarPanel } from './SidebarPanel';
 import { RestrictedArea, ZoneType } from '../types/maritime';
 import {
   X,
@@ -120,26 +121,13 @@ export const ZoneManagerPanel: React.FC<ZoneManagerPanelProps> = ({
   };
 
   return (
-    <aside
-      aria-label="Zone and Geofence Manager"
-      className="absolute top-14 left-14 z-30 w-88 bg-white/95 backdrop-blur-md border border-slate-200 rounded-lg shadow-2xl text-slate-800 overflow-hidden font-sans select-none animate-in fade-in duration-200"
+    <SidebarPanel
+      isOpen={isOpen}
+      onClose={onClose}
+      title="Maritime Geofence Zones"
+      badge={`${areas.filter((a) => a.status !== 'EXPIRED').length} ZONES`}
+      icon={<ShieldAlert className="w-4 h-4 text-orange-600" />}
     >
-      {/* Header */}
-      <div className="flex items-center justify-between px-3 py-2 bg-slate-50 border-b border-slate-200 text-slate-900">
-        <div className="flex items-center gap-2">
-          <ShieldAlert className="w-4 h-4 text-orange-600" />
-          <span className="text-[11px] font-bold tracking-wider uppercase">
-            Maritime Geofence Zones ({areas.filter((a) => a.status !== 'EXPIRED').length})
-          </span>
-        </div>
-        <button
-          onClick={onClose}
-          className="p-1 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
-          title="Close Zone Manager"
-        >
-          <X className="w-3.5 h-3.5" />
-        </button>
-      </div>
 
       {/* Subheader Toolbar */}
       <div className="flex items-center justify-between px-3 py-1.5 bg-slate-100/70 border-b border-slate-200 text-[10px]">
@@ -362,6 +350,6 @@ export const ZoneManagerPanel: React.FC<ZoneManagerPanelProps> = ({
           })
         )}
       </div>
-    </aside>
+    </SidebarPanel>
   );
 };

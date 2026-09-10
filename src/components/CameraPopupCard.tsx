@@ -1,4 +1,5 @@
 import React from 'react';
+import { DetailDrawer } from './DetailDrawer';
 import { EOCamera } from '../types/maritime';
 import { Vessel } from '../data/vessels';
 import { getDistanceMeters, isPointInFov } from '../utils/geoUtils';
@@ -55,35 +56,19 @@ export const CameraPopupCard: React.FC<CameraPopupCardProps> = ({
 
 
   return (
-    <aside
-      aria-label="Camera Sensor Details"
-      className="absolute top-4 left-16 z-20 w-80 bg-white/95 backdrop-blur-md border border-slate-200 rounded-lg shadow-2xl text-slate-800 overflow-hidden font-sans select-none animate-in fade-in duration-200"
+    <DetailDrawer
+      isOpen={!!camera}
+      onClose={onClose}
+      title={`EO CAMERA • ${siteTitle}`}
+      badge={camera.id}
+      icon={
+        <span
+          className={`w-2 h-2 rounded-full ${
+            isDemoActive ? 'bg-sky-500 animate-pulse' : 'bg-slate-400'
+          }`}
+        />
+      }
     >
-      {/* 1. Header Bar */}
-      <div className="flex items-center justify-between px-3 py-2 bg-slate-50 text-slate-900 border-b border-slate-200">
-        <div className="flex items-center gap-2">
-          <div
-            className={`w-2 h-2 rounded-full ${
-              isDemoActive ? 'bg-sky-500 animate-pulse' : 'bg-slate-400'
-            }`}
-          />
-          <div>
-            <span className="text-[9px] font-mono text-sky-700 font-bold uppercase tracking-wider block leading-none">
-              POSSIBLE EO CAMERA
-            </span>
-            <span className="text-[12px] font-bold text-slate-900 leading-tight">
-              {camera.id} • {siteTitle}
-            </span>
-          </div>
-        </div>
-        <button
-          onClick={onClose}
-          className="p-1 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-200/60 transition-colors"
-          title="Deselect sensor station"
-        >
-          <X className="w-3.5 h-3.5" />
-        </button>
-      </div>
 
       {/* 2. Official Designation Banner */}
       <div className="px-3 py-1 bg-slate-100 border-b border-slate-200 text-[10px] text-slate-700 flex items-center justify-between font-medium">
@@ -259,6 +244,6 @@ export const CameraPopupCard: React.FC<CameraPopupCardProps> = ({
           <span>VIEW EO OBSERVATION</span>
         </button>
       </div>
-    </aside>
+    </DetailDrawer>
   );
 };

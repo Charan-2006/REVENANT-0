@@ -1,4 +1,5 @@
 import React from 'react';
+import { SidebarPanel } from './SidebarPanel';
 import { X, Play, Sliders, ShieldAlert, Radio, Trash2, Clock, CheckCircle2, AlertTriangle } from 'lucide-react';
 
 interface DemoScenariosModalProps {
@@ -81,26 +82,13 @@ export const DemoScenariosModal: React.FC<DemoScenariosModalProps> = ({
   ];
 
   return (
-    <aside
-      aria-label="Evaluation Demonstration Scenarios"
-      className="absolute top-14 left-14 z-30 w-100 bg-white/95 backdrop-blur-md border border-slate-200 rounded-lg shadow-2xl text-slate-800 overflow-hidden font-sans select-none animate-in fade-in duration-200"
+    <SidebarPanel
+      isOpen={isOpen}
+      onClose={onClose}
+      title="Demonstration Scenarios"
+      badge="SCENARIOS 1–7"
+      icon={<Sliders className="w-4 h-4 text-sky-600" />}
     >
-      {/* Header */}
-      <div className="flex items-center justify-between px-3.5 py-2 bg-slate-50 border-b border-slate-200 text-slate-900">
-        <div className="flex items-center gap-2">
-          <Sliders className="w-4 h-4 text-sky-600" />
-          <span className="text-[11px] font-bold tracking-wider uppercase">
-            Surveillance Track Scenarios (1–7)
-          </span>
-        </div>
-        <button
-          onClick={onClose}
-          className="p-1 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
-          title="Close Scenarios"
-        >
-          <X className="w-3.5 h-3.5" />
-        </button>
-      </div>
 
       <div className="px-3 py-1.5 bg-slate-100/70 border-b border-slate-200 text-[10px] text-slate-600">
         Click any scenario below to execute and visibly demonstrate the expected solution:
@@ -141,6 +129,6 @@ export const DemoScenariosModal: React.FC<DemoScenariosModalProps> = ({
           </div>
         ))}
       </div>
-    </aside>
+    </SidebarPanel>
   );
 };

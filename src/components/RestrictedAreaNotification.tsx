@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { RestrictedAreaEvent } from '../types/maritime';
-import { ShieldAlert, ArrowRight, X } from 'lucide-react';
+import { ShieldAlert, Eye, X } from 'lucide-react';
 
 interface RestrictedAreaNotificationProps {
   latestEvent: RestrictedAreaEvent | null;
@@ -21,7 +21,7 @@ export const RestrictedAreaNotification: React.FC<RestrictedAreaNotificationProp
       const timer = setTimeout(() => {
         setVisible(false);
         onDismiss();
-      }, 6000);
+      }, 6500);
       return () => clearTimeout(timer);
     } else {
       setVisible(false);
@@ -32,56 +32,73 @@ export const RestrictedAreaNotification: React.FC<RestrictedAreaNotificationProp
 
   const isEntry = latestEvent.type === 'ENTRY';
 
+  const handleClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setVisible(false);
+    onDismiss();
+    if (onSelectVessel) {
+      onSelectVessel(latestEvent.vesselId);
+    }
+  };
+
   return (
     <div
-      onClick={() => onSelectVessel && onSelectVessel(latestEvent.vesselId)}
-      className={`absolute top-4 right-4 z-40 w-80 bg-white/95 backdrop-blur-md border rounded-lg shadow-2xl p-2.5 text-slate-800 font-sans select-none cursor-pointer transition-all animate-in fade-in slide-in-from-top-2 duration-200 ${
-        isEntry ? 'border-orange-400' : 'border-slate-300'
-      }`}
+      onClick={handleClick}
+      className={`absolute top-3.5 right-3.5 z-45 w-84 max-w-[calc(100vw-72px)] bg-white border border-slate-200 border-l-4 ${
+        isEntry ? 'border-l-orange-500' : 'border-l-sky-500'
+      } rounded-lg shadow-xl p-3 text-slate-800 font-sans select-none cursor-pointer transition-all hover:shadow-2xl hover:border-slate-300 animate-in fade-in slide-in-from-right-2 duration-150`}
     >
-      <div className="flex items-start justify-between gap-2">
-        <div className="flex items-center gap-2">
-          <div
-            className={`w-2 h-2 rounded-full ${
-              isEntry ? 'bg-orange-500 animate-ping' : 'bg-slate-400'
+      <div className="flex items-center justify-between gap-2 mb-2">
+        <div className="flex items-center gap-1.5 min-w-0">
+          <span
+            className={`w-2 h-2 rounded-full shrink-0 ${
+              isEntry ? 'bg-orange-500 animate-ping' : 'bg-sky-500'
             }`}
           />
           <ShieldAlert
-            className={`w-4 h-4 ${isEntry ? 'text-orange-600' : 'text-slate-500'}`}
+            className={`w-3.5 h-3.5 shrink-0 ${isEntry ? 'text-orange-600' : 'text-sky-600'}`}
           />
-          <div>
-            <span
-              className={`text-[9.5px] font-mono font-bold uppercase tracking-wider block leading-tight ${
-                isEntry ? 'text-orange-700' : 'text-slate-500'
-              }`}
-            >
-              {isEntry ? 'RESTRICTED AREA ENTRY' : 'RESTRICTED AREA EXIT'}
-            </span>
-            <span className="text-[12px] font-bold text-slate-900 leading-tight">
-              {latestEvent.vesselName} ({latestEvent.vesselId})
-            </span>
-          </div>
+          <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-slate-700 truncate leading-none">
+            {isEntry ? 'RESTRICTED AREA ENTRY' : 'RESTRICTED AREA EXIT'}
+          </span>
         </div>
 
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            setVisible(false);
-            onDismiss();
-          }}
-          className="p-1 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
-          title="Dismiss notification"
-        >
-          <X className="w-3 h-3" />
-        </button>
+        <div className="flex items-center gap-1 shrink-0">
+          <button
+            type="button"
+            onClick={handleClick}
+            className="px-2.5 py-0.5 rounded bg-slate-900 hover:bg-slate-800 text-white text-[9.5px] font-bold tracking-wider transition-colors uppercase flex items-center gap-1 shadow-xs"
+            title="View alert and target details"
+          >
+            <Eye className="w-2.5 h-2.5 text-slate-300" />
+            <span>VIEW</span>
+          </button>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setVisible(false);
+              onDismiss();
+            }}
+            className="p-1 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
+            title="Dismiss notification"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
       </div>
 
-      <div className="mt-2 pt-1.5 border-t border-slate-200 flex items-center justify-between text-[9.5px] text-slate-600">
-        <div className="flex items-center gap-1">
-          <span className="text-slate-500">Zone:</span>
-          <span className="font-semibold text-orange-800">{latestEvent.areaName}</span>
+      <div className="text-[12.5px] font-bold text-slate-900 leading-tight truncate mb-2">
+        {latestEvent.vesselName}{' '}
+        <span className="font-mono text-slate-500 text-[11px] font-semibold">({latestEvent.vesselId})</span>
+      </div>
+
+      <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[9.5px] text-slate-500">
+        <div className="truncate pr-1">
+          <span>Zone: </span>
+          <strong className="text-slate-800 font-semibold">{latestEvent.areaName}</strong>
         </div>
-        <div className="font-mono text-slate-500">{latestEvent.timestamp}</div>
+        <span className="font-mono text-slate-400 shrink-0">{latestEvent.timestamp}</span>
       </div>
     </div>
   );

@@ -1,4 +1,5 @@
 import React from 'react';
+import { DetailDrawer } from './DetailDrawer';
 import { RestrictedArea } from '../types/maritime';
 import { Vessel } from '../data/vessels';
 import { X, ShieldAlert, Trash2, Power } from 'lucide-react';
@@ -28,31 +29,15 @@ export const RestrictedAreaPopupCard: React.FC<RestrictedAreaPopupCardProps> = (
   );
 
   return (
-    <aside
-      aria-label="Restricted Area Details"
-      className="absolute top-4 left-16 z-20 w-72 bg-white/95 backdrop-blur-md border border-slate-200 rounded-lg shadow-2xl text-slate-800 overflow-hidden font-sans select-none animate-in fade-in duration-200"
+    <DetailDrawer
+      isOpen={!!area}
+      onClose={onClose}
+      title={`${area.id} • ${area.name}`}
+      badge={area.zoneType || 'RED'}
+      icon={<ShieldAlert className="w-4 h-4 text-orange-600" />}
+      headerBg="bg-orange-50/80"
+      headerBorder="border-orange-200"
     >
-      {/* Header */}
-      <div className="flex items-center justify-between px-3 py-2 bg-orange-50/80 border-b border-orange-200 text-slate-900">
-        <div className="flex items-center gap-2">
-          <ShieldAlert className="w-4 h-4 text-orange-600" />
-          <div>
-            <span className="text-[9px] font-mono text-orange-700 font-bold uppercase tracking-wider block leading-none">
-              RESTRICTED AREA
-            </span>
-            <span className="text-[12px] font-bold text-slate-900 leading-tight">
-              {area.id} • {area.name}
-            </span>
-          </div>
-        </div>
-        <button
-          onClick={onClose}
-          className="p-1 rounded text-slate-400 hover:text-slate-700 hover:bg-orange-100/60 transition-colors"
-          title="Close details"
-        >
-          <X className="w-3.5 h-3.5" />
-        </button>
-      </div>
 
       {/* Body */}
       <div className="p-3 space-y-2 text-[11px]">
@@ -136,6 +121,6 @@ export const RestrictedAreaPopupCard: React.FC<RestrictedAreaPopupCardProps> = (
           </button>
         </div>
       </div>
-    </aside>
+    </DetailDrawer>
   );
 };

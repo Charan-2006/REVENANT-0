@@ -29,7 +29,7 @@ export const CoordinateBar: React.FC<CoordinateBarProps> = ({
             <span className="text-[10px] font-bold tracking-wider text-slate-900 uppercase">
               Maritime Legend
             </span>
-            <span className="text-[9px] text-sky-700 font-mono font-semibold">Coastal View</span>
+            <span className="text-[9px] text-sky-700 font-mono font-semibold">REVENANT</span>
           </div>
 
           <div className="space-y-1.5 text-[10.5px]">

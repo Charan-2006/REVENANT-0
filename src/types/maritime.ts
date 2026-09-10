@@ -170,6 +170,32 @@ export interface PositionReportEvaluation {
 }
 
 // -----------------------------------------------------------------------------
+// CENTRALIZED OVERLAY & NOTIFICATION ARCHITECTURE
+// -----------------------------------------------------------------------------
+export type ActiveOverlay =
+  | 'status'
+  | 'operator'
+  | 'alert'
+  | 'vesselDetail'
+  | 'cameraDetail'
+  | 'zoneDetail'
+  | null;
+
+export interface AppNotification {
+  id: string;
+  type: 'RESTRICTED_ENTRY' | 'RESTRICTED_EXIT' | 'DARK_VESSEL' | 'ALERT';
+  title: string;
+  targetId: string;
+  targetName: string;
+  zoneName?: string;
+  timestamp: string;
+  alertId?: string;
+  vesselId?: string;
+  severity: 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'INFO';
+  createdAt: number;
+}
+
+// -----------------------------------------------------------------------------
 // ALERT ENGINE MODELS
 // -----------------------------------------------------------------------------
 export type AlertStatus = 
