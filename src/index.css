@@ -1,0 +1,90 @@
+@import 'maplibre-gl/dist/maplibre-gl.css';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  color: #1e293b;
+  background-color: #f8fafc;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+html, body, #root {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+/* Custom Scrollbar for compact panels */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* MapLibre Canvas full fill */
+.maplibregl-map {
+  width: 100%;
+  height: 100%;
+}
+
+.maplibregl-control-container {
+  display: none !important; /* We build our custom minimalist Skylight controls */
+}
+
+/* Reticle pulsing for selected event */
+@keyframes reticle-pulse {
+  0% {
+    transform: scale(1);
+    opacity: 0.9;
+  }
+  50% {
+    transform: scale(1.15);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 0.9;
+  }
+}
+
+.animate-reticle {
+  animation: reticle-pulse 2s infinite ease-in-out;
+}
+
+/* Transition for Red -> Black correlated marker animation */
+.marker-transition {
+  transition: all 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* MapLibre Hover Tooltips Reset - Zero white boxes or default browser borders */
+.maplibregl-popup {
+  pointer-events: none !important;
+  z-index: 50 !important;
+}
+
+.maplibregl-popup-content {
+  background: transparent !important;
+  padding: 0 !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
+  border: none !important;
+}
+
+.maplibregl-popup-tip {
+  display: none !important; /* Pure clean floating tooltip without default arrow */
+}
