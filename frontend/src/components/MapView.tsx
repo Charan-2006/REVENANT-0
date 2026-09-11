@@ -134,9 +134,10 @@ export const MapView: React.FC<MapViewProps> = ({
     // Map click: cooperative deselect
     map.on('click', (e) => {
       if (restrictedControllerRef.current?.getIsDrawing()) return;
-      const cameraFeatures = map.queryRenderedFeatures(e.point, { layers: ['camera-stations-layer'] });
-      const vesselFeatures = map.queryRenderedFeatures(e.point, { layers: ['vessels-layer'] });
-      const areaFeatures = map.queryRenderedFeatures(e.point, { layers: ['restricted-areas-fill'] });
+      const cameraLayers = ['camera-stations-core', 'camera-stations-halo', 'camera-stations-labels'].filter((l) => map.getLayer(l));
+      const cameraFeatures = cameraLayers.length ? map.queryRenderedFeatures(e.point, { layers: cameraLayers }) : [];
+      const vesselFeatures = map.getLayer('vessels-layer') ? map.queryRenderedFeatures(e.point, { layers: ['vessels-layer'] }) : [];
+      const areaFeatures = map.getLayer('restricted-areas-fill') ? map.queryRenderedFeatures(e.point, { layers: ['restricted-areas-fill'] }) : [];
 
       if (cameraFeatures.length === 0 && vesselFeatures.length === 0 && areaFeatures.length === 0) {
         if (onSelectVesselRef.current) onSelectVesselRef.current(null);

@@ -9,45 +9,6 @@ export interface CameraLayerOptions {
 }
 
 /**
- * Creates a professional 14x14px SVG fixed optical sensor silhouette image
- */
-export function createCameraSvgImage(
-  bodyColor: string,
-  strokeColor: string,
-  lensColor: string
-): Promise<HTMLImageElement> {
-  return new Promise((resolve, reject) => {
-    const svgString = `
-      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 14 14" fill="none">
-        <!-- Sensor base mount -->
-        <rect x="5.5" y="10.5" width="3" height="2" rx="0.5" fill="#334155" stroke="#475569" stroke-width="0.5" />
-        <!-- Sensor pivot yoke -->
-        <path d="M4 9 L4 10.5 L10 10.5 L10 9" stroke="#64748b" stroke-width="0.8" fill="none" />
-        <!-- Sensor camera barrel housing -->
-        <rect x="3" y="4.5" width="8" height="4.8" rx="1.2" fill="${bodyColor}" stroke="${strokeColor}" stroke-width="0.9" />
-        <!-- Optical aperture lens -->
-        <circle cx="7" cy="6.9" r="1.6" fill="${lensColor}" />
-        <!-- Optical reflection dot -->
-        <circle cx="6.5" cy="6.4" r="0.5" fill="#ffffff" opacity="0.8" />
-      </svg>
-    `;
-
-    const blob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const img = new Image();
-    img.onload = () => {
-      URL.revokeObjectURL(url);
-      resolve(img);
-    };
-    img.onerror = (err) => {
-      URL.revokeObjectURL(url);
-      reject(err);
-    };
-    img.src = url;
-  });
-}
-
-/**
  * Generates the FOV wedge polygon, range arc, and range label GeoJSON for a selected camera
  */
 export function generateSelectedCameraFovGeoJSON(cam: EOCamera): GeoJSON.FeatureCollection {
@@ -66,7 +27,7 @@ export function generateSelectedCameraFovGeoJSON(cam: EOCamera): GeoJSON.Feature
   // 1. Sector polygon: [origin] + arcCoords + [origin]
   const polygonCoords: [number, number][] = [[cam.lon, cam.lat], ...arcCoords, [cam.lon, cam.lat]];
 
-  // 2. Midpoint of range arc for subtle distance label
+  // 2. Midpoint of range arc for distance label
   const midAngle = cam.heading;
   const rangeLabelPt = destinationPoint(cam.lon, cam.lat, cam.rangeKm * 0.95, midAngle);
 
@@ -132,7 +93,7 @@ export class CameraLayerController {
     this.hoverPopup = new maplibregl.Popup({
       closeButton: false,
       closeOnClick: false,
-      offset: [0, -10],
+      offset: [0, -12],
       className: 'camera-hover-popup',
     });
   }
@@ -147,28 +108,7 @@ export class CameraLayerController {
   public async init(): Promise<void> {
     if (this.isInitialized || !this.map) return;
 
-    // 1. Register Professional SVG Sensor Markers (Normal, Active Demo, Selected)
-    try {
-      // Normal / Reference: Dark navy body, subtle blue-gray border, slate lens
-      const normalImg = await createCameraSvgImage('#1e293b', '#64748b', '#94a3b8');
-      // Active Demo (e.g. PSS Madras): Slate body, blue border, sky blue lens
-      const activeImg = await createCameraSvgImage('#0f172a', '#0284c7', '#38bdf8');
-      // Selected highlight: Dark body, bright cyan highlight, high-contrast lens
-      const selectedImg = await createCameraSvgImage('#0f172a', '#38bdf8', '#7dd3fc');
-
-      if (this.map.hasImage('camera-marker-normal')) this.map.removeImage('camera-marker-normal');
-      this.map.addImage('camera-marker-normal', normalImg);
-
-      if (this.map.hasImage('camera-marker-active')) this.map.removeImage('camera-marker-active');
-      this.map.addImage('camera-marker-active', activeImg);
-
-      if (this.map.hasImage('camera-marker-selected')) this.map.removeImage('camera-marker-selected');
-      this.map.addImage('camera-marker-selected', selectedImg);
-    } catch (e) {
-      console.error('Failed to register camera SVG images', e);
-    }
-
-    // 2. Build GeoJSON FeatureCollection for all 87 DGLL NAIS Physical Shore Stations
+    // 1. Build GeoJSON FeatureCollection for all 87 DGLL NAIS Physical Shore Stations
     const cameraPointsGeoJSON: GeoJSON.FeatureCollection = {
       type: 'FeatureCollection',
       features: this.cameras.map((cam) => ({
@@ -182,7 +122,7 @@ export class CameraLayerController {
           stationCode: cam.stationCode || cam.id,
           siteName: cam.siteName || cam.name.replace(/^PSS\s+/i, ''),
           fullName: cam.fullName || cam.name,
-          status: cam.status,
+          status: cam.status || 'REFERENCE',
           model: cam.model || 'Coastal Sensor Site',
           rangeKm: cam.rangeKm,
           heading: cam.heading,
@@ -200,7 +140,7 @@ export class CameraLayerController {
       })),
     };
 
-    // 3. Add GeoJSON Source (Direct individual rendering, no clustering)
+    // 2. Add GeoJSON Source
     if (!this.map.getSource('camera-stations-source')) {
       this.map.addSource('camera-stations-source', {
         type: 'geojson',
@@ -209,7 +149,7 @@ export class CameraLayerController {
       });
     }
 
-    // 6. Add Dynamic FOV Sources (Empty by default — only rendered when station selected)
+    // 3. Add Dynamic FOV Sources
     if (!this.map.getSource('selected-camera-fov-source')) {
       this.map.addSource('selected-camera-fov-source', {
         type: 'geojson',
@@ -224,7 +164,7 @@ export class CameraLayerController {
       });
     }
 
-    // 7. Add FOV Layers (Translucent Light Blue-Gray Fill, Thin Border, Range Arc & Distance Label)
+    // 4. Add FOV Layers (Translucent Light Blue Fill, Dashed Perimeter, Range Arc & Distance Tag)
     if (!this.map.getLayer('camera-fov-fill')) {
       this.map.addLayer({
         id: 'camera-fov-fill',
@@ -233,7 +173,7 @@ export class CameraLayerController {
         filter: ['==', '$type', 'Polygon'],
         paint: {
           'fill-color': '#0ea5e9',
-          'fill-opacity': 0.10, // Very light translucent fill so seafloor bathymetry remains visible
+          'fill-opacity': 0.15,
         },
       });
     }
@@ -246,9 +186,9 @@ export class CameraLayerController {
         filter: ['==', '$type', 'Polygon'],
         paint: {
           'line-color': '#38bdf8',
-          'line-width': 1.0,
+          'line-width': 1.2,
           'line-dasharray': [3, 2],
-          'line-opacity': 0.80,
+          'line-opacity': 0.85,
         },
       });
     }
@@ -261,8 +201,8 @@ export class CameraLayerController {
         filter: ['==', '$type', 'LineString'],
         paint: {
           'line-color': '#0284c7',
-          'line-width': 1.6,
-          'line-opacity': 0.90,
+          'line-width': 1.8,
+          'line-opacity': 0.95,
         },
       });
     }
@@ -275,7 +215,7 @@ export class CameraLayerController {
         filter: ['==', '$type', 'Point'],
         layout: {
           'text-field': ['get', 'label'],
-          'text-size': 9,
+          'text-size': 9.5,
           'text-allow-overlap': true,
           'text-ignore-placement': true,
           'text-anchor': 'bottom',
@@ -288,67 +228,154 @@ export class CameraLayerController {
       });
     }
 
-    // 8. Add Subtle Selection Ring Layer around Selected Camera
+    // 5. Add Selection Ring Layer
     if (!this.map.getLayer('selected-camera-ring')) {
       this.map.addLayer({
         id: 'selected-camera-ring',
         type: 'circle',
         source: 'selected-camera-ring-source',
         paint: {
-          'circle-radius': 9.5,
+          'circle-radius': 11.5,
           'circle-color': 'transparent',
           'circle-stroke-color': '#38bdf8',
-          'circle-stroke-width': 1.6,
-          'circle-stroke-opacity': 0.90,
+          'circle-stroke-width': 2.0,
+          'circle-stroke-opacity': 0.95,
         },
       });
     }
 
-    // 9. Add Camera Station Marker Symbol Layer (Direct individual sensor icons, 10–14px)
-    // Label appears only at close zoom (minzoom 8.5) to keep map completely uncluttered
-    if (!this.map.getLayer('camera-stations-layer')) {
+    // 6. Native WebGL High-Visibility Coastal Sensor Beacons (GUARANTEED TO RENDER ON ALL ZOOM LEVELS)
+    // A) Outer glowing halo beacon (6px to 13px)
+    if (!this.map.getLayer('camera-stations-halo')) {
       this.map.addLayer({
-        id: 'camera-stations-layer',
-        type: 'symbol',
+        id: 'camera-stations-halo',
+        type: 'circle',
         source: 'camera-stations-source',
-        layout: {
-          'icon-image': [
-            'match',
-            ['get', 'status'],
-            'DEMO ACTIVE',
-            'camera-marker-active',
-            'SELECTED',
-            'camera-marker-selected',
-            /* default REFERENCE */ 'camera-marker-normal',
-          ],
-          'icon-size': [
+        paint: {
+          'circle-radius': [
             'interpolate',
             ['linear'],
             ['zoom'],
-            4,
-            0.70, // ~10px
-            7,
-            0.85, // ~12px
-            11,
-            1.0, // ~14px
+            3.5, 5.0,
+            6.0, 7.5,
+            9.0, 10.5,
+            13.0, 14.0
           ],
-          'icon-anchor': 'center',
-          'icon-allow-overlap': true,
-          'icon-ignore-placement': true,
-          // Labels shown only at close zoom to avoid crowding
+          'circle-color': [
+            'match',
+            ['get', 'status'],
+            'DEMO ACTIVE',
+            'rgba(14, 165, 233, 0.45)',
+            /* default */ 'rgba(2, 132, 199, 0.28)',
+          ],
+          'circle-stroke-color': [
+            'match',
+            ['get', 'status'],
+            'DEMO ACTIVE',
+            '#38bdf8',
+            /* default */ '#0ea5e9',
+          ],
+          'circle-stroke-width': 1.2,
+          'circle-stroke-opacity': 0.85,
+        },
+      });
+    }
+
+    // B) Crisp Solid Center Sensor Body (3.5px to 8px)
+    if (!this.map.getLayer('camera-stations-core')) {
+      this.map.addLayer({
+        id: 'camera-stations-core',
+        type: 'circle',
+        source: 'camera-stations-source',
+        paint: {
+          'circle-radius': [
+            'interpolate',
+            ['linear'],
+            ['zoom'],
+            3.5, 3.2,
+            6.0, 4.5,
+            9.0, 6.0,
+            13.0, 8.0
+          ],
+          'circle-color': [
+            'match',
+            ['get', 'status'],
+            'DEMO ACTIVE',
+            '#0284c7',
+            /* default */ '#0f172a',
+          ],
+          'circle-stroke-color': [
+            'match',
+            ['get', 'status'],
+            'DEMO ACTIVE',
+            '#38bdf8',
+            /* default */ '#38bdf8',
+          ],
+          'circle-stroke-width': 1.5,
+        },
+      });
+    }
+
+    // C) Optical Lens Reflection Center Dot (1.2px to 3.2px)
+    if (!this.map.getLayer('camera-stations-lens')) {
+      this.map.addLayer({
+        id: 'camera-stations-lens',
+        type: 'circle',
+        source: 'camera-stations-source',
+        paint: {
+          'circle-radius': [
+            'interpolate',
+            ['linear'],
+            ['zoom'],
+            3.5, 1.2,
+            6.0, 1.8,
+            9.0, 2.5,
+            13.0, 3.2
+          ],
+          'circle-color': [
+            'match',
+            ['get', 'status'],
+            'DEMO ACTIVE',
+            '#ffffff',
+            /* default */ '#7dd3fc',
+          ],
+        },
+      });
+    }
+
+    // D) Clear Coastal Site Labels along the Indian Coastline
+    if (!this.map.getLayer('camera-stations-labels')) {
+      this.map.addLayer({
+        id: 'camera-stations-labels',
+        type: 'symbol',
+        source: 'camera-stations-source',
+        layout: {
           'text-field': ['get', 'siteName'],
-          'text-size': 8.5,
-          'text-offset': [0, 1.15],
+          'text-size': [
+            'interpolate',
+            ['linear'],
+            ['zoom'],
+            4.5, 8.0,
+            7.0, 9.0,
+            11.0, 10.5
+          ],
+          'text-offset': [0, 1.1],
           'text-anchor': 'top',
           'text-allow-overlap': false,
           'text-optional': true,
         },
         paint: {
-          'text-color': '#cbd5e1',
-          'text-halo-color': 'rgba(15, 23, 42, 0.95)',
-          'text-halo-width': 1.5,
-          // Fade in labels only at close zoom (zoom 8.5 to 9.5)
-          'text-opacity': ['interpolate', ['linear'], ['zoom'], 7.8, 0, 8.5, 0.4, 9.5, 1.0],
+          'text-color': '#f1f5f9',
+          'text-halo-color': 'rgba(15, 23, 42, 0.98)',
+          'text-halo-width': 1.8,
+          'text-opacity': [
+            'interpolate',
+            ['linear'],
+            ['zoom'],
+            4.8, 0.70,
+            6.0, 0.90,
+            8.0, 1.0
+          ],
         },
       });
     }
@@ -358,47 +385,63 @@ export class CameraLayerController {
   }
 
   private bindEvents(): void {
-    // 1. Station Hover: Compact, clean 3-line tooltip matching Part 15
-    this.map.on('mouseenter', 'camera-stations-layer', (e) => {
-      if (this.isDrawing) return;
-      this.map.getCanvas().style.cursor = 'pointer';
-      if (!e.features || !e.features.length) return;
+    const interactiveLayers = ['camera-stations-core', 'camera-stations-halo'];
 
-      const feature = e.features[0];
-      const coordinates = (feature.geometry as GeoJSON.Point).coordinates.slice() as [number, number];
-      const props = feature.properties;
-      if (!props) return;
+    interactiveLayers.forEach((layerId) => {
+      // 1. Hover tooltip
+      this.map.on('mouseenter', layerId, (e) => {
+        if (this.isDrawing) return;
+        this.map.getCanvas().style.cursor = 'pointer';
+        if (!e.features || !e.features.length) return;
 
-      const cameraId = props.id || 'CAM-01';
-      const siteName = (props.siteName || props.name || 'COASTAL SITE').toUpperCase();
+        const feature = e.features[0];
+        const coordinates = (feature.geometry as GeoJSON.Point).coordinates.slice() as [number, number];
+        const props = feature.properties;
+        if (!props) return;
 
-      const html = `
-        <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; min-width: 90px; padding: 4px 7px; border-radius: 4px; background: rgba(255, 255, 255, 0.98); border: 1px solid rgba(14, 165, 233, 0.6); box-shadow: 0 4px 12px rgba(0,0,0,0.15); line-height: 1.25; backdrop-filter: blur(8px);">
-          <div style="font-family: ui-monospace, SFMono-Regular, monospace; font-size: 10px; font-weight: 700; color: #0f172a; letter-spacing: 0.04em;">${cameraId}</div>
-          <div style="font-size: 8px; font-weight: 700; color: #0284c7; text-transform: uppercase; letter-spacing: 0.06em; margin: 1px 0;">EO SENSOR</div>
-          <div style="font-size: 8.5px; color: #64748b; font-weight: 500;">${siteName}</div>
-        </div>
-      `;
+        const cameraId = props.id || 'CAM-01';
+        const siteName = (props.siteName || props.name || 'COASTAL SITE').toUpperCase();
+        const state = props.state || 'India';
+        const rangeKm = props.rangeKm || 15;
+        const heading = props.heading || 90;
+        const isDemo = props.status === 'DEMO ACTIVE';
 
-      this.hoverPopup.setLngLat(coordinates).setHTML(html).addTo(this.map);
-    });
+        const html = `
+          <div class="maritime-camera-popup" style="font-family: ui-sans-serif, system-ui, sans-serif; min-width: 140px; padding: 6px 9px; border-radius: 6px; background: rgba(15, 23, 42, 0.96); border: 1px solid rgba(56, 189, 248, 0.6); box-shadow: 0 4px 16px rgba(0,0,0,0.6); backdrop-filter: blur(8px); line-height: 1.3;">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 2px;">
+              <span style="font-family: ui-monospace, monospace; font-size: 10px; font-weight: 700; color: #38bdf8;">${cameraId}</span>
+              <span style="font-size: 8px; font-weight: 700; color: ${isDemo ? '#38bdf8' : '#10b981'}; background: ${isDemo ? 'rgba(2, 132, 199, 0.3)' : 'rgba(6, 78, 59, 0.8)'}; border: 1px solid ${isDemo ? '#38bdf8' : 'rgba(16, 185, 129, 0.6)'}; padding: 1px 4px; border-radius: 3px;">
+                ${isDemo ? 'PRIMARY EO' : 'COASTAL PSS'}
+              </span>
+            </div>
+            <div style="font-size: 11px; font-weight: 700; color: #f8fafc;">${siteName}</div>
+            <div style="font-size: 9px; color: #94a3b8; margin-top: 1px;">${state} • Range: ${rangeKm} km • Azimuth: ${heading}°</div>
+            <div style="font-size: 8.5px; color: #38bdf8; margin-top: 4px; border-top: 1px solid rgba(51, 65, 85, 0.8); padding-top: 3px; font-weight: 500;">
+              Click to view optical coverage & observation feed
+            </div>
+          </div>
+        `;
 
-    this.map.on('mouseleave', 'camera-stations-layer', () => {
-      this.map.getCanvas().style.cursor = '';
-      this.hoverPopup.remove();
-    });
+        this.hoverPopup.setLngLat(coordinates).setHTML(html).addTo(this.map);
+      });
 
-    // 2. Click on Station: Select camera, render FOV, notify callback
-    this.map.on('click', 'camera-stations-layer', (e) => {
-      if (this.isDrawing) return;
-      if (!e.features || !e.features.length) return;
-      const id = e.features[0].properties?.id;
-      const cam = this.cameras.find((c) => c.id === id) || null;
+      this.map.on('mouseleave', layerId, () => {
+        this.map.getCanvas().style.cursor = '';
+        this.hoverPopup.remove();
+      });
 
-      this.setSelectedCamera(cam);
-      if (this.onSelectCamera) {
-        this.onSelectCamera(cam);
-      }
+      // 2. Click handler
+      this.map.on('click', layerId, (e) => {
+        if (this.isDrawing) return;
+        if (!e.features || !e.features.length) return;
+        const id = e.features[0].properties?.id;
+        const cam = this.cameras.find((c) => c.id === id) || null;
+
+        this.setSelectedCamera(cam);
+        if (this.onSelectCamera) {
+          this.onSelectCamera(cam);
+        }
+      });
     });
   }
 
@@ -456,7 +499,10 @@ export class CameraLayerController {
     const val = visible ? 'visible' : 'none';
 
     [
-      'camera-stations-layer',
+      'camera-stations-halo',
+      'camera-stations-core',
+      'camera-stations-lens',
+      'camera-stations-labels',
       'selected-camera-ring',
       'camera-fov-fill',
       'camera-fov-outline',
