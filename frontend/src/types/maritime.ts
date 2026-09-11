@@ -267,7 +267,8 @@ export type AuditEventType =
   | 'OPTICAL_SIGHTING'
   | 'PATROL_DISPATCHED'
   | 'PATROL_RECALLED'
-  | 'BLIND_SPOT_ZONE_CREATED';
+  | 'BLIND_SPOT_ZONE_CREATED'
+  | 'REPORT_GENERATED';
 
 export interface AuditLogEntry {
   eventId: string;
@@ -404,4 +405,89 @@ export interface TimeSliderState {
   isPlaying: boolean;
   playbackSpeed: 1 | 2;
   currentDisplayTime: string;
+}
+
+/**
+ * Official Maritime Incident Dossier & Law Enforcement Report
+ */
+export interface IncidentReport {
+  reportId: string;
+  generatedAt: string;
+  generatedAtIST: string;
+  classification: string;
+  reportingOfficer: string;
+  commandAuthority: string;
+  
+  // Incident Core
+  alertId?: string;
+  incidentType: string;
+  priority: 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW';
+  operationalStatus: string;
+  locationDescription: string;
+  coordinates: {
+    lat: number;
+    lon: number;
+    dms: string;
+  };
+  jurisdictionZone: string;
+
+  // Target Vessel Intelligence
+  targetVessel: {
+    id: string;
+    name: string;
+    vesselType: string;
+    status: 'DARK' | 'CORRELATED' | 'RESTRICTED';
+    flag: string;
+    mmsi: string;
+    lengthMeters: number;
+    speedKnots: number;
+    courseHeadingDeg: number;
+    aisBroadcastStatus: string;
+    restrictedZonesViolated?: string[];
+  };
+
+  // Sensor Evidence & Telemetry
+  sensorTelemetry: {
+    detectingSensor: string;
+    sensorType: string;
+    detectionSource: string;
+    sensorCoordinates?: [number, number];
+    sensorAzimuthDeg?: number;
+    sensorFovDeg?: number;
+    sensorRangeKm?: number;
+    aiModelUsed: string;
+    aiConfidencePercent: number;
+    correlationScorePercent: number;
+  };
+
+  // Tactical Patrol Response
+  tacticalResponse: {
+    patrolAssigned?: {
+      id: string;
+      name: string;
+      unitType: string;
+      baseStation: string;
+      status: string;
+      dispatchTime?: string;
+      distanceKm?: number;
+      etaMinutes?: number;
+    };
+    mitigationActionsTaken: string[];
+    dispositionAction?: string;
+    dispositionReason?: string;
+    dispositionNotes?: string;
+  };
+
+  // Forensic Event Timeline
+  timeline: {
+    timestamp: string;
+    source: string;
+    event: string;
+    details: string;
+  }[];
+
+  // Operator Remarks
+  investigatorNotes: string;
+  recommendedDirectives: string[];
+  signatureVerificationCode: string;
 }

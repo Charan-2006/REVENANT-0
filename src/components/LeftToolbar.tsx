@@ -15,6 +15,7 @@ import {
   Sliders,
   Radio,
   Scan,
+  FileText,
 } from 'lucide-react';
 import { MapLayersState } from './LayerControlPopover';
 
@@ -35,6 +36,7 @@ export interface LeftToolbarProps {
   activePanel: ActiveSidebarPanel;
   onTogglePanel: (panel: ActiveSidebarPanel) => void;
   onOpenAIDetector?: () => void;
+  onOpenReports?: () => void;
 }
 
 export const LeftToolbar: React.FC<LeftToolbarProps> = ({
@@ -52,6 +54,7 @@ export const LeftToolbar: React.FC<LeftToolbarProps> = ({
   activePanel,
   onTogglePanel,
   onOpenAIDetector,
+  onOpenReports,
 }) => {
   return (
     <div className="absolute left-3.5 top-3.5 z-20 flex flex-col items-start gap-2 select-none">
@@ -251,6 +254,19 @@ export const LeftToolbar: React.FC<LeftToolbarProps> = ({
           >
             <Scan className="w-4 h-4 text-sky-400 group-hover:scale-110 transition-transform" />
             <span className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-sky-400" />
+          </button>
+        )}
+
+        {/* 8. MARITIME INCIDENT REPORTS */}
+        {onOpenReports && (
+          <button
+            onClick={onOpenReports}
+            className="w-[34px] h-[34px] flex items-center justify-center text-indigo-400 hover:bg-indigo-950/60 hover:text-indigo-300 transition-colors relative group"
+            title="Incident Reports: Generate formal Maritime Incident Dossier, SITREP and PDF"
+            aria-label="Maritime Incident Reports"
+          >
+            <FileText className="w-4 h-4 text-indigo-400 group-hover:scale-110 transition-transform" />
+            <span className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-indigo-400" />
           </button>
         )}
       </div>

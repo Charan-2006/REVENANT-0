@@ -14,6 +14,7 @@ import {
   Ruler,
   Timer,
   MapPin,
+  FileText,
 } from 'lucide-react';
 import { findNearestPatrol, kmToNM } from '../utils/patrolUtils';
 
@@ -33,6 +34,7 @@ export interface AlertDetailDrawerProps {
   onSimulateAisMatch?: (vesselId: string) => void;
   onDispatchPatrol?: (alertId: string, patrolId: string) => void;
   onRecallPatrol?: (patrolId: string) => void;
+  onGenerateReport?: (alert: MaritimeAlert) => void;
 }
 
 export const AlertDetailDrawer: React.FC<AlertDetailDrawerProps> = ({
@@ -46,6 +48,7 @@ export const AlertDetailDrawer: React.FC<AlertDetailDrawerProps> = ({
   onSimulateAisMatch,
   onDispatchPatrol,
   onRecallPatrol,
+  onGenerateReport,
 }) => {
   const [dispositionAction, setDispositionAction] = useState<'CONFIRM' | 'DISMISS' | 'ESCALATE'>('CONFIRM');
   const [reasonCode, setReasonCode] = useState<DispositionReasonCode>('CONFIRMED_CONTACT');
@@ -539,6 +542,22 @@ export const AlertDetailDrawer: React.FC<AlertDetailDrawerProps> = ({
           >
             <Radio className="w-3.5 h-3.5" />
             <span>INGEST MATCHING AIS TELEMETRY</span>
+          </button>
+        )}
+
+        {/* Generate Incident Report Dossier */}
+        {onGenerateReport && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onGenerateReport(alert);
+            }}
+            className="w-full py-2 px-2.5 rounded bg-indigo-600 hover:bg-indigo-500 border border-indigo-400/40 text-white font-bold text-[10px] flex items-center justify-center gap-1.5 shadow-sm transition-all"
+            title="Generate official Maritime Incident Dossier, SITREP and PDF"
+          >
+            <FileText className="w-3.5 h-3.5 text-indigo-200" />
+            <span className="tracking-wide">GENERATE INCIDENT REPORT</span>
           </button>
         )}
 

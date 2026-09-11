@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { SidebarPanel } from './SidebarPanel';
 import { MaritimeAlert, DispositionReasonCode, PatrolUnit } from '../types/maritime';
 import { Vessel } from '../data/vessels';
-import { AlertTriangle, ShieldAlert, Compass, Anchor, Send } from 'lucide-react';
+import { AlertTriangle, ShieldAlert, Compass, Anchor, Send, FileText } from 'lucide-react';
 import { findNearestPatrol } from '../utils/patrolUtils';
 
 interface AlertCenterProps {
@@ -20,6 +20,7 @@ interface AlertCenterProps {
   onSelectTarget: (targetId: string) => void;
   onDispatchPatrol?: (alertId: string, patrolId: string) => void;
   onRecallPatrol?: (patrolId: string) => void;
+  onGenerateReport?: (alert: MaritimeAlert) => void;
 }
 
 export const AlertCenter: React.FC<AlertCenterProps> = ({
@@ -32,6 +33,7 @@ export const AlertCenter: React.FC<AlertCenterProps> = ({
   onSelectTarget,
   onDispatchPatrol,
   onRecallPatrol,
+  onGenerateReport,
 }) => {
   const [selectedAlertForAction, setSelectedAlertForAction] = useState<{
     alert: MaritimeAlert;
@@ -300,21 +302,53 @@ export const AlertCenter: React.FC<AlertCenterProps> = ({
                     <span>
                       State: <strong className="text-slate-200">{alert.currentState}</strong>
                     </span>
-                    {alert.disposition && (
-                      <span className="text-slate-400">
-                        {alert.disposition.action} • {alert.disposition.reason}
-                      </span>
-                    )}
+                    <div className="flex items-center gap-2">
+                      {alert.disposition && (
+                        <span className="text-slate-400">
+                          {alert.disposition.action} • {alert.disposition.reason}
+                        </span>
+                      )}
+                      {onGenerateReport && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onGenerateReport(alert);
+                          }}
+                          className="flex items-center gap-1 text-indigo-400 hover:text-indigo-300 font-medium px-1.5 py-0.5 rounded bg-indigo-950/60 border border-indigo-800/80 text-[8.5px] transition-colors"
+                          title="Generate Incident Dossier"
+                        >
+                          <FileText className="w-2.5 h-2.5" />
+                          <span>Dossier</span>
+                        </button>
+                      )}
+                    </div>
                   </div>
                 ) : (
                   <div className="flex items-center justify-between pt-1.5 border-t border-slate-800 text-[10px]">
-                    <button
-                      onClick={() => onSelectTarget(alert.targetId)}
-                      className="flex items-center gap-1 text-sky-400 hover:text-sky-300 font-medium transition-colors"
-                    >
-                      <Compass className="w-3 h-3" />
-                      <span>Locate Target</span>
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => onSelectTarget(alert.targetId)}
+                        className="flex items-center gap-1 text-sky-400 hover:text-sky-300 font-medium transition-colors"
+                      >
+                        <Compass className="w-3 h-3" />
+                        <span>Locate</span>
+                      </button>
+                      {onGenerateReport && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onGenerateReport(alert);
+                          }}
+                          className="flex items-center gap-1 text-indigo-400 hover:text-indigo-300 font-medium px-1.5 py-0.5 rounded bg-indigo-950/60 border border-indigo-800/80 text-[8.5px] transition-colors"
+                          title="Generate Incident Dossier"
+                        >
+                          <FileText className="w-2.5 h-2.5" />
+                          <span>Report</span>
+                        </button>
+                      )}
+                    </div>
 
                     <div className="flex items-center gap-1 font-bold text-[9px]">
                       <button

@@ -13,6 +13,7 @@ import {
   ActiveOverlay,
   AppNotification,
   PatrolUnit,
+  IncidentReport,
 } from './types/maritime';
 import { INITIAL_RESTRICTED_AREAS } from './data/mockRestrictedAreas';
 import { evaluateVesselGeofence, detectGeofenceTransitions } from './utils/geofenceEngine';
@@ -20,6 +21,7 @@ import { INITIAL_PATROL_UNITS } from './data/patrolUnits';
 import { findNearestPatrol, calculateHaversineDistanceKm, calculateInterceptETA } from './utils/patrolUtils';
 import { checkCameraCoverage } from './utils/geoUtils';
 import { MOCK_CAMERAS } from './data/mockCameras';
+import { generateIncidentReport } from './utils/reportGenerator';
 
 // UI Components
 import { Header } from './components/Header';
@@ -41,6 +43,7 @@ import { AlertCenter } from './components/AlertCenter';
 import { AuditLogDrawer } from './components/AuditLogDrawer';
 import { DemoScenariosModal } from './components/DemoScenariosModal';
 import { AIVesselDetectionModal, DetectedVessel } from './components/AIVesselDetectionModal';
+import { IncidentReportModal } from './components/IncidentReportModal';
 
 import { X } from 'lucide-react';
 
@@ -71,6 +74,10 @@ export const App: React.FC = () => {
   // Real YOLO11n AI Vessel Detector State
   const [isAIDetectorOpen, setIsAIDetectorOpen] = useState(false);
   const [aiDetectorCamera, setAiDetectorCamera] = useState<EOCamera | null>(null);
+
+  // Maritime Incident Dossier & Reporting Modal State
+  const [isReportModalOpen, setIsReportModalOpen] = useState(false);
+  const [activeReport, setActiveReport] = useState<IncidentReport | null>(null);
 
   // Active Scenario Execution Banner
   const [activeScenarioBanner, setActiveScenarioBanner] = useState<{
@@ -888,6 +895,50 @@ export const App: React.FC = () => {
     handleDispatchPatrol(vesselAlert?.alertId ?? '', patrolId, vesselId);
   };
 
+  /**
+   * Generates and opens a complete Maritime Incident Dossier with PDF print, SITREP, and audit trail.
+   */
+  const handleOpenIncidentReport = (targetAlert?: MaritimeAlert | null, targetVessel?: Vessel | null) => {
+    const alertObj = targetAlert || selectedAlert || alerts[0] || null;
+    const vesselObj =
+      targetVessel ||
+      (alertObj ? evaluatedVessels.find((v) => v.id === alertObj.targetId) : null) ||
+      selectedVessel ||
+      evaluatedVessels[0] ||
+      null;
+
+    const assignedPatrol =
+      patrolUnits.find(
+        (p) =>
+          p.assignedTargetId === (alertObj?.alertId || alertObj?.targetId || vesselObj?.id) ||
+          p.status === 'RESPONDING'
+      ) || null;
+
+    const nearestCam = vesselObj
+      ? MOCK_CAMERAS.find(
+          (c) => calculateHaversineDistanceKm(vesselObj.lat, vesselObj.lon, c.lat, c.lon) < 50
+        ) || MOCK_CAMERAS[0]
+      : MOCK_CAMERAS[0];
+
+    const report = generateIncidentReport({
+      alert: alertObj,
+      vessel: vesselObj,
+      patrolUnits,
+      auditLogs,
+    });
+
+    addAuditLog({
+      eventType: 'REPORT_GENERATED',
+      targetId: alertObj?.alertId || vesselObj?.id || 'INCIDENT',
+      action: `Generated Maritime Incident Dossier ${report.reportId} for ${report.targetVessel.name}`,
+      reason: 'INCIDENT_DOCUMENTATION',
+      metadata: { reportId: report.reportId, securityClassification: report.classification },
+    });
+
+    setActiveReport(report);
+    setIsReportModalOpen(true);
+  };
+
   // Compute active tactical intercept line for MapView
   const activeIntercept = useMemo(() => {
     // 1. Responding patrol unit takes highest priority
@@ -1578,6 +1629,7 @@ export const App: React.FC = () => {
           setAiDetectorCamera(null);
           setIsAIDetectorOpen(true);
         }}
+        onOpenReports={() => handleOpenIncidentReport()}
       />
 
       {/* 1. SINGLE ACTIVE SIDEBAR PANEL SYSTEM (Requirements 1–7) */}
@@ -1614,6 +1666,7 @@ export const App: React.FC = () => {
         onDispositAlert={handleDispositAlert}
         onDispatchPatrol={handleDispatchPatrol}
         onRecallPatrol={handleRecallPatrol}
+        onGenerateReport={(targetAlert) => handleOpenIncidentReport(targetAlert, null)}
         onSelectTarget={(targetId) => {
           const vsl = vessels.find((v) => v.id === targetId);
           if (vsl) {
@@ -1690,6 +1743,7 @@ export const App: React.FC = () => {
         onSimulateAisMatch={handleSimulateAisMatch}
         onDispatchPatrol={handleDispatchPatrol}
         onRecallPatrol={handleRecallPatrol}
+        onGenerateReport={(alert) => handleOpenIncidentReport(alert, selectedVessel)}
       />
 
       {/* Selected Vessel Contextual Card */}
@@ -1698,6 +1752,7 @@ export const App: React.FC = () => {
         patrolUnits={patrolUnits}
         onDispatchPatrol={handleDispatchPatrolToVessel}
         onRecallPatrol={handleRecallPatrol}
+        onGenerateReport={(vsl) => handleOpenIncidentReport(null, vsl)}
         onClose={() => {
           setActiveOverlay(null);
           setSelectedVesselId(null);
@@ -1769,6 +1824,13 @@ export const App: React.FC = () => {
         }}
         preselectedCamera={aiDetectorCamera}
         onPlotVesselOnMap={handlePlotAIVessel}
+      />
+
+      {/* Formal Maritime Incident Dossier & Reporting Modal */}
+      <IncidentReportModal
+        isOpen={isReportModalOpen}
+        onClose={() => setIsReportModalOpen(false)}
+        report={activeReport}
       />
 
       {/* Drawing Mode Status & Close Prompt */}

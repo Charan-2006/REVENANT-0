@@ -5,7 +5,7 @@ import { MOCK_CAMERAS } from '../data/mockCameras';
 import { isPointInFov, getDistanceMeters } from '../utils/geoUtils';
 import { maritimeZoneEngine } from '../utils/maritimeZones';
 import { checkAuthorisedRegistry } from '../data/authorizedRegistry';
-import { Navigation, Anchor, ShieldAlert, Radio, CheckCircle, AlertTriangle, Send } from 'lucide-react';
+import { Navigation, Anchor, ShieldAlert, Radio, CheckCircle, AlertTriangle, Send, FileText } from 'lucide-react';
 import { PatrolUnit } from '../types/maritime';
 import { findNearestPatrol, kmToNM } from '../utils/patrolUtils';
 
@@ -18,6 +18,7 @@ interface VesselDetailCardProps {
   /** Dispatches a patrol to this contact; App resolves the contact's ACTIVE alert if one exists. */
   onDispatchPatrol?: (vesselId: string, patrolId: string) => void;
   onRecallPatrol?: (patrolId: string) => void;
+  onGenerateReport?: (vessel: Vessel) => void;
 }
 
 export const VesselDetailCard: React.FC<VesselDetailCardProps> = ({
@@ -28,6 +29,7 @@ export const VesselDetailCard: React.FC<VesselDetailCardProps> = ({
   onViewAlert,
   onDispatchPatrol,
   onRecallPatrol,
+  onGenerateReport,
 }) => {
   if (!vessel) return null;
 
@@ -458,6 +460,22 @@ export const VesselDetailCard: React.FC<VesselDetailCardProps> = ({
           >
             <Radio className="w-3.5 h-3.5" />
             <span>INGEST MATCHING AIS TELEMETRY</span>
+          </button>
+        )}
+
+        {/* Generate Incident Report Dossier */}
+        {onGenerateReport && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onGenerateReport(vessel);
+            }}
+            className="w-full mt-2 py-2 px-2.5 rounded bg-indigo-600 hover:bg-indigo-500 border border-indigo-400/40 text-white font-bold text-[10px] flex items-center justify-center gap-1.5 shadow-sm transition-all"
+            title="Generate official Maritime Incident Dossier, SITREP and PDF"
+          >
+            <FileText className="w-3.5 h-3.5 text-indigo-200" />
+            <span className="tracking-wide">GENERATE INCIDENT REPORT</span>
           </button>
         )}
 
