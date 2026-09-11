@@ -1,0 +1,298 @@
+@import 'maplibre-gl/dist/maplibre-gl.css';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  color: #f1f5f9;
+  background-color: #0a0e17;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+html, body, #root {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  background-color: #0a0e17;
+}
+
+/* Custom Scrollbar for compact operational panels */
+::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #253349;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #3b4e6b;
+}
+
+/* MapLibre Canvas full fill */
+.maplibregl-map {
+  width: 100%;
+  height: 100%;
+  background-color: #070b14;
+}
+
+.maplibregl-control-container {
+  display: none !important; /* Custom operational GIS controls */
+}
+
+/* Reticle steady indicator for selected event */
+@keyframes reticle-pulse {
+  0% {
+    transform: scale(1);
+    opacity: 0.85;
+  }
+  50% {
+    transform: scale(1.08);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 0.85;
+  }
+}
+
+.animate-reticle {
+  animation: reticle-pulse 3s infinite ease-in-out;
+}
+
+/* Transition for correlated marker animation */
+.marker-transition {
+  transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* MapLibre Hover Tooltips Reset */
+.maplibregl-popup {
+  pointer-events: none !important;
+  z-index: 50 !important;
+}
+
+.maplibregl-popup-content {
+  background: transparent !important;
+  padding: 0 !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
+  border: none !important;
+}
+
+.maplibregl-popup-tip {
+  display: none !important;
+}
+
+/* ==========================================================================
+   THEME SYSTEM: HIGH-CONTRAST LIGHT & DARK MARITIME CONSOLE
+   ========================================================================== */
+
+/* Dark Theme (Default Maritime Console) */
+.theme-dark {
+  color-scheme: dark;
+  background-color: #0a0e17;
+  color: #f1f5f9;
+}
+
+/* Light Theme (Daylight Operational Console) */
+.theme-light {
+  color-scheme: light;
+  background-color: #f1f5f9 !important;
+  color: #0f172a !important;
+}
+
+/* Base Surfaces & Frames */
+.theme-light header {
+  background-color: #ffffff !important;
+  border-bottom-color: #e2e8f0 !important;
+  color: #0f172a !important;
+}
+
+.theme-light .theme-toggle-container {
+  background-color: #f1f5f9 !important;
+  border-color: #cbd5e1 !important;
+}
+
+.theme-light .bg-\[\#0a0e17\],
+.theme-light .bg-\[\#070b14\] {
+  background-color: #f1f5f9 !important;
+}
+
+.theme-light .bg-\[\#0b111e\],
+.theme-light .bg-\[\#0b121e\],
+.theme-light .bg-\[\#0f172a\],
+.theme-light .bg-\[\#0c1322\],
+.theme-light .bg-slate-900,
+.theme-light .bg-slate-950 {
+  background-color: #ffffff !important;
+  border-color: #cbd5e1 !important;
+  color: #0f172a !important;
+}
+
+/* Semi-transparent panel backdrops */
+.theme-light .bg-\[\#0f172a\]\/95,
+.theme-light .bg-\[\#0f172a\]\/98,
+.theme-light .bg-\[\#0c1322\]\/98,
+.theme-light .bg-\[\#0c1322\]\/95,
+.theme-light .bg-\[\#0c1322\]\/60,
+.theme-light .bg-\[\#0b111e\]\/95,
+.theme-light .bg-\[\#0b111e\]\/90,
+.theme-light .bg-slate-900\/95,
+.theme-light .bg-slate-900\/90 {
+  background-color: rgba(255, 255, 255, 0.98) !important;
+  border-color: #cbd5e1 !important;
+  color: #0f172a !important;
+}
+
+/* Internal Cards & Subsection Containers */
+.theme-light .bg-\[\#111827\],
+.theme-light .bg-\[\#151f32\],
+.theme-light .bg-slate-900\/60,
+.theme-light .bg-slate-900\/80,
+.theme-light .bg-slate-800\/60,
+.theme-light .bg-slate-800\/80,
+.theme-light .bg-slate-800\/50,
+.theme-light .bg-slate-800 {
+  background-color: #f8fafc !important;
+  border-color: #e2e8f0 !important;
+  color: #0f172a !important;
+}
+
+/* Borders & Dividers */
+.theme-light .border-slate-800,
+.theme-light .border-slate-700,
+.theme-light .border-\[\#1e293b\],
+.theme-light .border-slate-700\/80 {
+  border-color: #cbd5e1 !important;
+}
+
+.theme-light .border-slate-800\/80,
+.theme-light .border-slate-800\/60,
+.theme-light .border-slate-700\/60,
+.theme-light .divide-slate-800 > :not([hidden]) ~ :not([hidden]) {
+  border-color: #e2e8f0 !important;
+}
+
+/* High Contrast Text */
+.theme-light .text-slate-100,
+.theme-light .text-slate-200 {
+  color: #0f172a !important;
+}
+
+.theme-light .text-slate-300 {
+  color: #1e293b !important;
+}
+
+.theme-light .text-slate-400 {
+  color: #475569 !important;
+}
+
+.theme-light .text-slate-500 {
+  color: #64748b !important;
+}
+
+/* High Contrast Form Elements & Inputs */
+.theme-light input,
+.theme-light select,
+.theme-light textarea {
+  background-color: #ffffff !important;
+  border-color: #cbd5e1 !important;
+  color: #0f172a !important;
+}
+
+.theme-light input::placeholder,
+.theme-light textarea::placeholder {
+  color: #94a3b8 !important;
+}
+
+/* High Contrast Hover States */
+.theme-light .hover\:bg-slate-800:hover,
+.theme-light .hover\:bg-slate-800\/60:hover,
+.theme-light .hover\:bg-slate-700:hover,
+.theme-light .hover\:bg-slate-700\/60:hover {
+  background-color: #f1f5f9 !important;
+  color: #0f172a !important;
+}
+
+/* Muted Status Backgrounds transformed to high-contrast daylight cards */
+.theme-light .bg-emerald-950\/60,
+.theme-light .bg-emerald-950\/80 {
+  background-color: #ecfdf5 !important;
+  border-color: #a7f3d0 !important;
+  color: #065f46 !important;
+}
+
+.theme-light .bg-amber-950\/60,
+.theme-light .bg-amber-950\/80,
+.theme-light .bg-\[\#1a1612\],
+.theme-light .bg-\[\#1c1813\] {
+  background-color: #fffbeb !important;
+  border-color: #fde68a !important;
+  color: #92400e !important;
+}
+
+.theme-light .bg-rose-950\/40,
+.theme-light .bg-rose-950\/60,
+.theme-light .bg-rose-950\/80,
+.theme-light .bg-\[\#181119\] {
+  background-color: #fff1f2 !important;
+  border-color: #fecdd3 !important;
+  color: #9f1239 !important;
+}
+
+.theme-light .bg-cyan-950\/60,
+.theme-light .bg-cyan-950\/80,
+.theme-light .bg-sky-950\/60,
+.theme-light .bg-sky-950\/80,
+.theme-light .bg-\[\#101b2b\] {
+  background-color: #f0f9ff !important;
+  border-color: #bae6fd !important;
+  color: #0369a1 !important;
+}
+
+/* Text status accents in light mode */
+.theme-light .text-emerald-400 {
+  color: #047857 !important;
+}
+
+.theme-light .text-amber-400 {
+  color: #b45309 !important;
+}
+
+.theme-light .text-rose-400,
+.theme-light .text-rose-300 {
+  color: #be123c !important;
+}
+
+.theme-light .text-cyan-400,
+.theme-light .text-sky-400 {
+  color: #0284c7 !important;
+}
+
+/* Subtle Daylight Shadow */
+.theme-light .shadow-2xl,
+.theme-light .shadow-xl {
+  box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.12), 0 8px 10px -6px rgba(15, 23, 42, 0.08) !important;
+}
+
+/* Scrollbar adaptation */
+.theme-light ::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+}
+.theme-light ::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* In Camera Feed Modal, keep the video canvas area dark so video/synthetic detections remain clear */
+.theme-light .bg-\[\#080d17\] {
+  background-color: #080d17 !important;
+  color: #f1f5f9 !important;
+}

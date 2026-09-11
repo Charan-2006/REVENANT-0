@@ -1,0 +1,507 @@
+import * as maplibregl from 'maplibre-gl';
+import { 
+  Vessel, 
+  vesselsToGeoJSON, 
+  VESSEL_TRACKS, 
+  DARK_OBSERVATION_TRAILS 
+} from '../data/vessels';
+import { maritimeZoneEngine } from '../utils/maritimeZones';
+
+/**
+ * Creates a crisp 32x32px ImageData ship icon for MapLibre symbol layer.
+ * Top-down maritime vessel silhouette pointing North (0°).
+ * Pure minimal geometry: Pointed bow (▲), angled flare (/ \), straight sides (| |), flat stern (|_|).
+ * Perfectly symmetric and centered at (16, 16) for wobble-free map rotation.
+ * Generated synchronously via HTML5 Canvas to eliminate WebGL texture loading/revocation issues.
+ */
+export function createShipImageData(fillColor: string, strokeColor: string, size = 32): ImageData {
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext('2d', { willReadFrequently: true })!;
+
+  ctx.clearRect(0, 0, size, size);
+
+  // Vessel silhouette pointing North (0°)
+  const w = size;
+  const h = size;
+
+  ctx.beginPath();
+  // Pointed Bow
+  ctx.moveTo(w * 0.50, h * 0.08);
+  // Starboard Flare
+  ctx.lineTo(w * 0.82, h * 0.36);
+  // Starboard Side
+  ctx.lineTo(w * 0.82, h * 0.88);
+  // Flat Transom Stern
+  ctx.lineTo(w * 0.18, h * 0.88);
+  // Port Side
+  ctx.lineTo(w * 0.18, h * 0.36);
+  ctx.closePath();
+
+  ctx.fillStyle = fillColor;
+  ctx.fill();
+
+  ctx.strokeStyle = strokeColor;
+  ctx.lineWidth = 1.8;
+  ctx.lineJoin = 'round';
+  ctx.stroke();
+
+  return ctx.getImageData(0, 0, size, size);
+}
+
+export interface VesselLayerOptions {
+  map: maplibregl.Map;
+  vessels: Vessel[];
+  onSelectVessel?: (vessel: Vessel | null) => void;
+}
+
+export class VesselLayerController {
+  private map: maplibregl.Map;
+  private vessels: Vessel[];
+  private selectedVesselId: string | null = null;
+  private onSelectVessel?: (vessel: Vessel | null) => void;
+  private hoverPopup: maplibregl.Popup;
+  private isInitialized = false;
+  private isDrawing = false;
+
+  constructor(options: VesselLayerOptions) {
+    this.map = options.map;
+    this.vessels = options.vessels;
+    this.onSelectVessel = options.onSelectVessel;
+
+    this.hoverPopup = new maplibregl.Popup({
+      closeButton: false,
+      closeOnClick: false,
+      offset: [0, -10],
+      className: 'maritime-hover-popup',
+    });
+  }
+
+  /**
+   * Initializes MapLibre sources, layers, and event listeners
+   */
+  public async init(): Promise<void> {
+    if (this.isInitialized || !this.map) return;
+
+    // 1. Register vector ship icons synchronously via Canvas ImageData
+    try {
+      const correlatedImg = createShipImageData('#090d16', '#38bdf8', 32); // Deep dark navy/black with maritime border
+      const darkImg = createShipImageData('#dc2626', '#fca5a5', 32);       // High-contrast red with bright edge
+      const restrictedImg = createShipImageData('#ea580c', '#fdba74', 32); // Vivid orange with light edge
+
+      if (this.map.hasImage('vessel-correlated')) {
+        this.map.removeImage('vessel-correlated');
+      }
+      this.map.addImage('vessel-correlated', correlatedImg);
+
+      if (this.map.hasImage('vessel-dark')) {
+        this.map.removeImage('vessel-dark');
+      }
+      this.map.addImage('vessel-dark', darkImg);
+
+      if (this.map.hasImage('vessel-restricted')) {
+        this.map.removeImage('vessel-restricted');
+      }
+      this.map.addImage('vessel-restricted', restrictedImg);
+    } catch (e) {
+      console.error('Failed to register vessel canvas images', e);
+    }
+
+    // 2. Add GeoJSON Vessel Source (Direct individual rendering, no clustering)
+    const geojsonData = vesselsToGeoJSON(this.vessels);
+    if (!this.map.getSource('vessels-source')) {
+      this.map.addSource('vessels-source', {
+        type: 'geojson',
+        data: geojsonData,
+        cluster: false,
+      });
+    }
+
+    // 5. Add Georeferenced Selection Ring Layer (subtle 1.2px ring tightly encircling small vessel)
+    if (!this.map.getSource('selected-vessel-source')) {
+      this.map.addSource('selected-vessel-source', {
+        type: 'geojson',
+        data: { type: 'FeatureCollection', features: [] },
+      });
+    }
+
+    if (!this.map.getLayer('selected-vessel-ring')) {
+      this.map.addLayer({
+        id: 'selected-vessel-ring',
+        type: 'circle',
+        source: 'selected-vessel-source',
+        paint: {
+          'circle-radius': [
+            'interpolate',
+            ['linear'],
+            ['zoom'],
+            3, 5.5,
+            5, 7.0,
+            7, 8.5,
+            9, 10.0,
+            11, 11.0,
+            13, 12.0,
+            18, 12.0
+          ],
+          'circle-color': 'transparent',
+          'circle-stroke-color': '#38bdf8',
+          'circle-stroke-width': 1.2,
+          'circle-stroke-opacity': 0.95,
+        },
+      });
+    }
+
+    // 6. Add AIS Track Layer (Thin track ending exactly at vessel coordinates)
+    if (!this.map.getSource('ais-track-source')) {
+      this.map.addSource('ais-track-source', {
+        type: 'geojson',
+        data: { type: 'FeatureCollection', features: [] },
+      });
+    }
+
+    if (!this.map.getLayer('ais-track-line')) {
+      this.map.addLayer({
+        id: 'ais-track-line',
+        type: 'line',
+        source: 'ais-track-source',
+        paint: {
+          'line-color': '#0f172a',
+          'line-width': 1.0,
+          'line-opacity': 0.8,
+        },
+      });
+    }
+
+    if (!this.map.getLayer('ais-track-points')) {
+      this.map.addLayer({
+        id: 'ais-track-points',
+        type: 'circle',
+        source: 'ais-track-source',
+        filter: ['==', '$type', 'Point'],
+        paint: {
+          'circle-radius': 1.8,
+          'circle-color': '#0f172a',
+          'circle-stroke-color': '#ffffff',
+          'circle-stroke-width': 0.6,
+        },
+      });
+    }
+
+    // 7. Add Dark Vessel EO Detection History Layer (Short observation history)
+    if (!this.map.getSource('dark-track-source')) {
+      this.map.addSource('dark-track-source', {
+        type: 'geojson',
+        data: { type: 'FeatureCollection', features: [] },
+      });
+    }
+
+    if (!this.map.getLayer('dark-track-line')) {
+      this.map.addLayer({
+        id: 'dark-track-line',
+        type: 'line',
+        source: 'dark-track-source',
+        paint: {
+          'line-color': '#dc2626',
+          'line-width': 1.0,
+          'line-dasharray': [2, 2],
+          'line-opacity': 0.85,
+        },
+      });
+    }
+
+    if (!this.map.getLayer('dark-track-points')) {
+      this.map.addLayer({
+        id: 'dark-track-points',
+        type: 'circle',
+        source: 'dark-track-source',
+        filter: ['==', '$type', 'Point'],
+        paint: {
+          'circle-radius': 1.8,
+          'circle-color': '#dc2626',
+          'circle-stroke-color': '#ffffff',
+          'circle-stroke-width': 0.6,
+        },
+      });
+    }
+
+    // 8. Add Individual Vessel Symbol Layer (Direct rendering at all zoom levels)
+    // Small map-native symbols: 8-12px at regional/India zoom, 10-16px at coastal, max 18px at close zoom
+    if (!this.map.getLayer('vessels-layer')) {
+      this.map.addLayer({
+        id: 'vessels-layer',
+        type: 'symbol',
+        source: 'vessels-source',
+        layout: {
+          'icon-image': [
+            'match',
+            ['get', 'displayStatus'],
+            'RESTRICTED',
+            'vessel-restricted',
+            'DARK',
+            'vessel-dark',
+            'vessel-correlated'
+          ],
+          'icon-rotate': ['get', 'heading'],
+          'icon-rotation-alignment': 'map',
+          'icon-pitch-alignment': 'map',
+          'icon-anchor': 'center',
+          'icon-allow-overlap': true,
+          'icon-ignore-placement': true,
+          'icon-size': [
+            'interpolate',
+            ['linear'],
+            ['zoom'],
+            3, 0.50,   // ~16px at global zoom
+            4.5, 0.68, // ~22px at Indian subcontinent overview (matches console screenshot)
+            7, 0.82,   // ~26px at state/coastal sector
+            10, 0.95,  // ~30px at harbor/port approach
+            13, 1.05,  // ~34px
+            18, 1.10   // ~35px
+          ],
+        },
+      });
+    }
+
+    this.bindEvents();
+    this.isInitialized = true;
+  }
+
+  /**
+   * Binds user interaction handlers (click, hover, pan/zoom stability)
+   */
+  private bindEvents(): void {
+    // Hover on vessel -> compact, clean, non-intrusive maritime identification tooltip
+    this.map.on('mouseenter', 'vessels-layer', (e) => {
+      if (this.isDrawing) return;
+      this.map.getCanvas().style.cursor = 'pointer';
+      if (!e.features || !e.features.length) return;
+
+      const feature = e.features[0];
+      const coordinates = (feature.geometry as GeoJSON.Point).coordinates.slice() as [number, number];
+      const vesselId = feature.properties?.id || 'VESSEL';
+      const vesselType = feature.properties?.vesselType || 'Commercial Vessel';
+      const status = feature.properties?.status;
+      const displayStatus = feature.properties?.displayStatus;
+
+      const isRestricted = displayStatus === 'RESTRICTED';
+      const isDark = !isRestricted && status === 'DARK';
+
+      const statusText = isRestricted
+        ? 'RESTRICTED'
+        : isDark
+        ? 'DARK VESSEL'
+        : 'CORRELATED';
+
+      const dotColor = isRestricted ? '#f59e0b' : isDark ? '#ef4444' : '#10b981';
+      const textColor = isRestricted ? '#fbbf24' : isDark ? '#f87171' : '#34d399';
+      const borderColor = isRestricted ? 'rgba(245, 158, 11, 0.6)' : isDark ? 'rgba(239, 68, 68, 0.6)' : 'rgba(51, 65, 85, 0.8)';
+
+      const html = `
+        <div class="maritime-vessel-popup" style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; min-width: 110px; padding: 5px 8px; border-radius: 4px; background: rgba(15, 23, 42, 0.96); border: 1px solid ${borderColor}; box-shadow: 0 4px 14px rgba(0,0,0,0.5); line-height: 1.25; backdrop-filter: blur(8px);">
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 3px;">
+            <span style="font-family: ui-monospace, SFMono-Regular, monospace; font-size: 10px; font-weight: 700; color: #f1f5f9; letter-spacing: 0.04em;">${vesselId}</span>
+            <span style="display: flex; align-items: center; gap: 3.5px; font-size: 8.5px; font-weight: 700; color: ${textColor}; text-transform: uppercase;">
+              <span style="display: inline-block; width: 5px; height: 5px; border-radius: 50%; background: ${dotColor};"></span>
+              ${statusText}
+            </span>
+          </div>
+          <div style="font-size: 9px; color: #94a3b8; font-weight: 500;">
+            ${vesselType}
+          </div>
+        </div>
+      `;
+
+      this.hoverPopup.setLngLat(coordinates).setHTML(html).addTo(this.map);
+    });
+
+    this.map.on('mouseleave', 'vessels-layer', () => {
+      this.map.getCanvas().style.cursor = '';
+      this.hoverPopup.remove();
+    });
+
+    // Click on vessel -> select vessel (full contextual investigation)
+    this.map.on('click', 'vessels-layer', (e) => {
+      if (this.isDrawing) return;
+      if (!e.features || !e.features.length) return;
+      const feature = e.features[0];
+      const vesselId = feature.properties?.id;
+      const vessel = this.vessels.find((v) => v.id === vesselId) || null;
+
+      this.setSelectedVessel(vessel ? vessel.id : null);
+      if (this.onSelectVessel) {
+        this.onSelectVessel(vessel);
+      }
+    });
+  }
+
+  /**
+   * Updates the selected vessel ID and manages geographic selection ring + tracks
+   */
+  public setSelectedVessel(vesselId: string | null): void {
+    this.selectedVesselId = vesselId;
+    if (!this.map || !this.map.isStyleLoaded()) return;
+
+    const ringSource = this.map.getSource('selected-vessel-source') as maplibregl.GeoJSONSource;
+    const aisSource = this.map.getSource('ais-track-source') as maplibregl.GeoJSONSource;
+    const darkSource = this.map.getSource('dark-track-source') as maplibregl.GeoJSONSource;
+
+    if (!vesselId) {
+      if (ringSource) ringSource.setData({ type: 'FeatureCollection', features: [] });
+      if (aisSource) aisSource.setData({ type: 'FeatureCollection', features: [] });
+      if (darkSource) darkSource.setData({ type: 'FeatureCollection', features: [] });
+      return;
+    }
+
+    const vessel = this.vessels.find((v) => v.id === vesselId);
+    if (!vessel) return;
+
+    // 1. Update selection ring at [vessel.lon, vessel.lat]
+    if (ringSource) {
+      ringSource.setData({
+        type: 'FeatureCollection',
+        features: [
+          {
+            type: 'Feature',
+            geometry: {
+              type: 'Point',
+              coordinates: [vessel.lon, vessel.lat],
+            },
+            properties: { id: vessel.id },
+          },
+        ],
+      });
+    }
+
+    // 2. Update track lines
+    if (vessel.status === 'CORRELATED') {
+      if (darkSource) darkSource.setData({ type: 'FeatureCollection', features: [] });
+
+      if (aisSource) {
+        // Retrieve predefined track or compute approach vector ending EXACTLY at vessel position
+        let points = VESSEL_TRACKS[vessel.id];
+        if (!points) {
+          const revRad = ((vessel.heading + 180) % 360) * (Math.PI / 180);
+          const p1: [number, number] = [
+            vessel.lon + Math.sin(revRad) * 0.15,
+            vessel.lat + Math.cos(revRad) * 0.15,
+          ];
+          const p2: [number, number] = [
+            vessel.lon + Math.sin(revRad) * 0.07,
+            vessel.lat + Math.cos(revRad) * 0.07,
+          ];
+          points = [p1, p2, [vessel.lon, vessel.lat]];
+        }
+
+        const features: GeoJSON.Feature[] = [
+          {
+            type: 'Feature',
+            geometry: {
+              type: 'LineString',
+              coordinates: points,
+            },
+            properties: { id: vessel.id },
+          },
+          ...points.slice(0, -1).map((pt) => ({
+            type: 'Feature' as const,
+            geometry: {
+              type: 'Point' as const,
+              coordinates: pt,
+            },
+            properties: { id: vessel.id },
+          })),
+        ];
+
+        aisSource.setData({
+          type: 'FeatureCollection',
+          features,
+        });
+      }
+    } else {
+      // Dark vessel: show only short EO detection history
+      if (aisSource) aisSource.setData({ type: 'FeatureCollection', features: [] });
+
+      if (darkSource) {
+        let points = DARK_OBSERVATION_TRAILS[vessel.id];
+        if (!points) {
+          const revRad = ((vessel.heading + 180) % 360) * (Math.PI / 180);
+          const p1: [number, number] = [
+            vessel.lon + Math.sin(revRad) * 0.04,
+            vessel.lat + Math.cos(revRad) * 0.04,
+          ];
+          points = [p1, [vessel.lon, vessel.lat]];
+        }
+
+        const features: GeoJSON.Feature[] = [
+          {
+            type: 'Feature',
+            geometry: {
+              type: 'LineString',
+              coordinates: points,
+            },
+            properties: { id: vessel.id },
+          },
+          ...points.map((pt) => ({
+            type: 'Feature' as const,
+            geometry: {
+              type: 'Point' as const,
+              coordinates: pt,
+            },
+            properties: { id: vessel.id },
+          })),
+        ];
+
+        darkSource.setData({
+          type: 'FeatureCollection',
+          features,
+        });
+      }
+    }
+  }
+
+  /**
+   * Sets drawing mode to suppress hover popups during polygon creation
+   */
+  public setIsDrawing(drawing: boolean): void {
+    this.isDrawing = drawing;
+    if (drawing) {
+      this.hoverPopup.remove();
+    }
+  }
+
+  /**
+   * Updates vessel data dynamically
+   */
+  public updateVessels(vessels: Vessel[]): void {
+    this.vessels = vessels;
+    if (!this.map) return;
+
+    const source = this.map.getSource('vessels-source') as maplibregl.GeoJSONSource;
+    if (source) {
+      source.setData(vesselsToGeoJSON(vessels));
+    } else if (this.map.isStyleLoaded()) {
+      this.init();
+    }
+  }
+
+  /**
+   * Toggles visibility of all vessel symbols, clusters, tracks, and selection rings
+   */
+  public setVisibility(visible: boolean): void {
+    if (!this.map || !this.map.isStyleLoaded()) return;
+    const val = visible ? 'visible' : 'none';
+
+    [
+      'vessels-layer',
+      'selected-vessel-ring',
+      'ais-track-line',
+      'ais-track-points',
+      'dark-track-line',
+      'dark-track-points',
+    ].forEach((id) => {
+      if (this.map.getLayer(id)) {
+        this.map.setLayoutProperty(id, 'visibility', val);
+      }
+    });
+  }
+}

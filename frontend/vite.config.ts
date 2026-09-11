@@ -8,6 +8,9 @@ export default defineConfig({
     exclude: ['maplibre-gl'],
   },
   server: {
+    fs: {
+      allow: ['..'],
+    },
     proxy: {
       '/api': {
         target: 'http://localhost:5000',
