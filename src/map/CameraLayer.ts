@@ -476,32 +476,20 @@ export class CameraLayerController {
             'interpolate',
             ['linear'],
             ['zoom'],
-            3.5, 5.5,
-            6.0, 8.0,
-            9.0, 11.0,
+            3.5, 6.0,
+            6.0, 8.5,
+            9.0, 11.5,
             13.0, 15.0
           ],
-          'circle-color': [
-            'match',
-            ['get', 'status'],
-            'DEMO ACTIVE',
-            'rgba(14, 165, 233, 0.50)',
-            /* default */ 'rgba(2, 132, 199, 0.35)',
-          ],
-          'circle-stroke-color': [
-            'match',
-            ['get', 'status'],
-            'DEMO ACTIVE',
-            '#00f0ff',
-            /* default */ '#0ea5e9',
-          ],
+          'circle-color': 'rgba(6, 182, 212, 0.40)',
+          'circle-stroke-color': '#00f0ff',
           'circle-stroke-width': 1.5,
           'circle-stroke-opacity': 0.95,
         },
       });
     }
 
-    // B) Crisp Solid Center Sensor Body (3.5px to 8px)
+    // B) Crisp Solid Center Sensor Body (4px to 9px)
     if (!this.map.getLayer('camera-stations-core')) {
       this.map.addLayer({
         id: 'camera-stations-core',
@@ -512,31 +500,19 @@ export class CameraLayerController {
             'interpolate',
             ['linear'],
             ['zoom'],
-            3.5, 3.5,
-            6.0, 5.0,
-            9.0, 6.5,
-            13.0, 8.5
+            3.5, 4.0,
+            6.0, 5.5,
+            9.0, 7.0,
+            13.0, 9.0
           ],
-          'circle-color': [
-            'match',
-            ['get', 'status'],
-            'DEMO ACTIVE',
-            '#0284c7',
-            /* default */ '#0f172a',
-          ],
-          'circle-stroke-color': [
-            'match',
-            ['get', 'status'],
-            'DEMO ACTIVE',
-            '#38bdf8',
-            /* default */ '#38bdf8',
-          ],
+          'circle-color': '#0284c7',
+          'circle-stroke-color': '#00f0ff',
           'circle-stroke-width': 1.6,
         },
       });
     }
 
-    // C) Optical Lens Reflection Center Dot (1.2px to 3.2px)
+    // C) Optical Lens Reflection Center Dot (1.5px to 3.5px)
     if (!this.map.getLayer('camera-stations-lens')) {
       this.map.addLayer({
         id: 'camera-stations-lens',
@@ -547,18 +523,12 @@ export class CameraLayerController {
             'interpolate',
             ['linear'],
             ['zoom'],
-            3.5, 1.4,
-            6.0, 2.0,
-            9.0, 2.8,
-            13.0, 3.5
+            3.5, 1.8,
+            6.0, 2.4,
+            9.0, 3.0,
+            13.0, 4.0
           ],
-          'circle-color': [
-            'match',
-            ['get', 'status'],
-            'DEMO ACTIVE',
-            '#ffffff',
-            /* default */ '#7dd3fc',
-          ],
+          'circle-color': '#ffffff',
         },
       });
     }
