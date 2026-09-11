@@ -48,8 +48,18 @@ wheels/
 venv/
 ENV/
 *.pt
+!backend/ml/revenant_vessel_detector.pt
+!ml/revenant_vessel_detector.pt
 *.onnx
 *.engine
+
+# Temporary ML results and uploads
+backend/results/*
+!backend/results/.gitkeep
+backend/uploads/*
+!backend/uploads/.gitkeep
+test_*.jpg
+test_*.png
 
 # Editor directories and files
 .vscode/*

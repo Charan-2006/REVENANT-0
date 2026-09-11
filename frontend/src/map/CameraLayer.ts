@@ -9,48 +9,42 @@ export interface CameraLayerOptions {
 }
 
 /**
- * Creates a professional 28x28px ImageData fixed optical sensor silhouette image
- * Uses HTML5 Canvas for bulletproof WebGL texture rendering
+ * Creates a professional 14x14px SVG fixed optical sensor silhouette image
  */
-export function createCameraImageData(
+export function createCameraSvgImage(
   bodyColor: string,
   strokeColor: string,
-  lensColor: string,
-  size = 28
-): ImageData {
-  const canvas = document.createElement('canvas');
-  canvas.width = size;
-  canvas.height = size;
-  const ctx = canvas.getContext('2d', { willReadFrequently: true })!;
+  lensColor: string
+): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const svgString = `
+      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 14 14" fill="none">
+        <!-- Sensor base mount -->
+        <rect x="5.5" y="10.5" width="3" height="2" rx="0.5" fill="#334155" stroke="#475569" stroke-width="0.5" />
+        <!-- Sensor pivot yoke -->
+        <path d="M4 9 L4 10.5 L10 10.5 L10 9" stroke="#64748b" stroke-width="0.8" fill="none" />
+        <!-- Sensor camera barrel housing -->
+        <rect x="3" y="4.5" width="8" height="4.8" rx="1.2" fill="${bodyColor}" stroke="${strokeColor}" stroke-width="0.9" />
+        <!-- Optical aperture lens -->
+        <circle cx="7" cy="6.9" r="1.6" fill="${lensColor}" />
+        <!-- Optical reflection dot -->
+        <circle cx="6.5" cy="6.4" r="0.5" fill="#ffffff" opacity="0.8" />
+      </svg>
+    `;
 
-  ctx.clearRect(0, 0, size, size);
-
-  const cx = size / 2;
-  const cy = size / 2;
-  const r = size * 0.40;
-
-  // Outer circular housing
-  ctx.beginPath();
-  ctx.arc(cx, cy, r, 0, Math.PI * 2);
-  ctx.fillStyle = bodyColor;
-  ctx.fill();
-  ctx.strokeStyle = strokeColor;
-  ctx.lineWidth = 2.0;
-  ctx.stroke();
-
-  // Inner sensor optic lens
-  ctx.beginPath();
-  ctx.arc(cx, cy, r * 0.50, 0, Math.PI * 2);
-  ctx.fillStyle = lensColor;
-  ctx.fill();
-
-  // Optical highlight reflection
-  ctx.beginPath();
-  ctx.arc(cx - r * 0.16, cy - r * 0.16, r * 0.16, 0, Math.PI * 2);
-  ctx.fillStyle = '#ffffff';
-  ctx.fill();
-
-  return ctx.getImageData(0, 0, size, size);
+    const blob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const img = new Image();
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      resolve(img);
+    };
+    img.onerror = (err) => {
+      URL.revokeObjectURL(url);
+      reject(err);
+    };
+    img.src = url;
+  });
 }
 
 /**
@@ -153,14 +147,14 @@ export class CameraLayerController {
   public async init(): Promise<void> {
     if (this.isInitialized || !this.map) return;
 
-    // 1. Register Professional Sensor Markers synchronously via Canvas ImageData
+    // 1. Register Professional SVG Sensor Markers (Normal, Active Demo, Selected)
     try {
-      // Normal / Reference: Dark navy body, bright cyan border, high-visibility lens
-      const normalImg = createCameraImageData('#0f172a', '#0284c7', '#38bdf8', 28);
-      // Active Demo (e.g. PSS Madras): Slate body, vivid blue border, white lens
-      const activeImg = createCameraImageData('#0369a1', '#38bdf8', '#ffffff', 28);
-      // Selected highlight: Amber body, bright amber border, white center
-      const selectedImg = createCameraImageData('#d97706', '#fbbf24', '#ffffff', 28);
+      // Normal / Reference: Dark navy body, subtle blue-gray border, slate lens
+      const normalImg = await createCameraSvgImage('#1e293b', '#64748b', '#94a3b8');
+      // Active Demo (e.g. PSS Madras): Slate body, blue border, sky blue lens
+      const activeImg = await createCameraSvgImage('#0f172a', '#0284c7', '#38bdf8');
+      // Selected highlight: Dark body, bright cyan highlight, high-contrast lens
+      const selectedImg = await createCameraSvgImage('#0f172a', '#38bdf8', '#7dd3fc');
 
       if (this.map.hasImage('camera-marker-normal')) this.map.removeImage('camera-marker-normal');
       this.map.addImage('camera-marker-normal', normalImg);
@@ -171,7 +165,7 @@ export class CameraLayerController {
       if (this.map.hasImage('camera-marker-selected')) this.map.removeImage('camera-marker-selected');
       this.map.addImage('camera-marker-selected', selectedImg);
     } catch (e) {
-      console.error('Failed to register camera canvas images', e);
+      console.error('Failed to register camera SVG images', e);
     }
 
     // 2. Build GeoJSON FeatureCollection for all 87 DGLL NAIS Physical Shore Stations
@@ -331,11 +325,12 @@ export class CameraLayerController {
             'interpolate',
             ['linear'],
             ['zoom'],
-            3.5, 0.45, // ~13px
-            5.0, 0.60, // ~17px
-            7.5, 0.78, // ~22px
-            11, 0.95,  // ~26px
-            14, 1.0,   // ~28px
+            4,
+            0.70, // ~10px
+            7,
+            0.85, // ~12px
+            11,
+            1.0, // ~14px
           ],
           'icon-anchor': 'center',
           'icon-allow-overlap': true,
@@ -378,10 +373,10 @@ export class CameraLayerController {
       const siteName = (props.siteName || props.name || 'COASTAL SITE').toUpperCase();
 
       const html = `
-        <div class="maritime-camera-popup" style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; min-width: 100px; padding: 5px 8px; border-radius: 4px; background: rgba(15, 23, 42, 0.96); border: 1px solid rgba(14, 165, 233, 0.6); box-shadow: 0 4px 14px rgba(0,0,0,0.5); line-height: 1.25; backdrop-filter: blur(8px);">
-          <div style="font-family: ui-monospace, SFMono-Regular, monospace; font-size: 10px; font-weight: 700; color: #f1f5f9; letter-spacing: 0.04em;">${cameraId}</div>
-          <div style="font-size: 8px; font-weight: 700; color: #38bdf8; text-transform: uppercase; letter-spacing: 0.06em; margin: 1px 0;">OPTICAL SENSOR</div>
-          <div style="font-size: 8.5px; color: #94a3b8; font-weight: 500;">${siteName}</div>
+        <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; min-width: 90px; padding: 4px 7px; border-radius: 4px; background: rgba(255, 255, 255, 0.98); border: 1px solid rgba(14, 165, 233, 0.6); box-shadow: 0 4px 12px rgba(0,0,0,0.15); line-height: 1.25; backdrop-filter: blur(8px);">
+          <div style="font-family: ui-monospace, SFMono-Regular, monospace; font-size: 10px; font-weight: 700; color: #0f172a; letter-spacing: 0.04em;">${cameraId}</div>
+          <div style="font-size: 8px; font-weight: 700; color: #0284c7; text-transform: uppercase; letter-spacing: 0.06em; margin: 1px 0;">EO SENSOR</div>
+          <div style="font-size: 8.5px; color: #64748b; font-weight: 500;">${siteName}</div>
         </div>
       `;
 

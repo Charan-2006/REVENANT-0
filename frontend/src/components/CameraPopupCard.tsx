@@ -18,11 +18,7 @@ export const CameraPopupCard: React.FC<CameraPopupCardProps> = ({
   onViewEo,
   vessels = [],
 }) => {
-  if (!camera) return null;
-
-  const siteTitle = camera.siteName || camera.name.replace(/^PSS\s+/i, '');
-  const isDemoActive = camera.status === 'DEMO ACTIVE';
-  const observationRadiusKm = camera.rangeKm || 15;
+  const observationRadiusKm = camera?.rangeKm || 15;
 
   // Geographically calculate vessels within observation radius & FOV
   const nearbyVessels = React.useMemo(() => {
@@ -53,6 +49,11 @@ export const CameraPopupCard: React.FC<CameraPopupCardProps> = ({
 
   const aisInFov = fovVessels.filter((v) => v.status === 'CORRELATED');
   const darkInFov = fovVessels.filter((v) => v.status === 'DARK');
+
+  if (!camera) return null;
+
+  const siteTitle = camera.siteName || camera.name.replace(/^PSS\s+/i, '');
+  const isDemoActive = camera.status === 'DEMO ACTIVE';
 
   return (
     <DetailDrawer

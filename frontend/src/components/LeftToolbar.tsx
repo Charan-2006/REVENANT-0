@@ -14,6 +14,7 @@ import {
   ShieldCheck,
   Sliders,
   Radio,
+  Scan,
 } from 'lucide-react';
 import { MapLayersState } from './LayerControlPopover';
 
@@ -33,6 +34,7 @@ export interface LeftToolbarProps {
   activeAlertCount?: number;
   activePanel: ActiveSidebarPanel;
   onTogglePanel: (panel: ActiveSidebarPanel) => void;
+  onOpenAIDetector?: () => void;
 }
 
 export const LeftToolbar: React.FC<LeftToolbarProps> = ({
@@ -49,6 +51,7 @@ export const LeftToolbar: React.FC<LeftToolbarProps> = ({
   activeAlertCount = 0,
   activePanel,
   onTogglePanel,
+  onOpenAIDetector,
 }) => {
   return (
     <div className="absolute left-3.5 top-3.5 z-20 flex flex-col items-start gap-2 select-none">
@@ -237,6 +240,19 @@ export const LeftToolbar: React.FC<LeftToolbarProps> = ({
         >
           <ShieldCheck className="w-4 h-4" />
         </button>
+
+        {/* 7. AI VESSEL DETECTOR (YOLO11n SeaShips) */}
+        {onOpenAIDetector && (
+          <button
+            onClick={onOpenAIDetector}
+            className="w-[34px] h-[34px] flex items-center justify-center text-sky-400 hover:bg-sky-950/60 hover:text-sky-300 transition-colors relative group"
+            title="AI Vessel Detector: Run real fine-tuned YOLO11n on optical camera images"
+            aria-label="AI Vessel Detector"
+          >
+            <Scan className="w-4 h-4 text-sky-400 group-hover:scale-110 transition-transform" />
+            <span className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-sky-400" />
+          </button>
+        )}
       </div>
 
       {/* Demo Scenario Simulation Play/Pause */}

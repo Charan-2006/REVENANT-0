@@ -257,7 +257,8 @@ export type AuditEventType =
   | 'ALERT_CONFIRMED' 
   | 'ALERT_DISMISSED' 
   | 'ALERT_ESCALATED' 
-  | 'CORRELATION_UPDATED';
+  | 'CORRELATION_UPDATED'
+  | 'OPTICAL_SIGHTING';
 
 export interface AuditLogEntry {
   eventId: string;

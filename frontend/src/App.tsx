@@ -36,6 +36,7 @@ import { ZoneManagerPanel } from './components/ZoneManagerPanel';
 import { AlertCenter } from './components/AlertCenter';
 import { AuditLogDrawer } from './components/AuditLogDrawer';
 import { DemoScenariosModal } from './components/DemoScenariosModal';
+import { AIVesselDetectionModal, DetectedVessel } from './components/AIVesselDetectionModal';
 
 import { X } from 'lucide-react';
 
@@ -62,6 +63,10 @@ export const App: React.FC = () => {
 
   // Queued Temporary Notifications (Requirements 5, 11, 12, 13)
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
+
+  // Real YOLO11n AI Vessel Detector State
+  const [isAIDetectorOpen, setIsAIDetectorOpen] = useState(false);
+  const [aiDetectorCamera, setAiDetectorCamera] = useState<EOCamera | null>(null);
 
   // Active Scenario Execution Banner
   const [activeScenarioBanner, setActiveScenarioBanner] = useState<{
@@ -568,6 +573,53 @@ export const App: React.FC = () => {
       action: `Dark contact dynamically correlated with live AIS transponder message`,
       reason: 'AIS_BROADCAST_MATCH',
       metadata: { spatialTolerance: '< 500m', correlationConfidence: '96%' },
+    });
+  };
+
+  // ---------------------------------------------------------------------------
+  // REAL YOLO11n AI VESSEL DETECTOR MAP PROJECTION
+  // ---------------------------------------------------------------------------
+  const handlePlotAIVessel = (vsl: DetectedVessel) => {
+    if (!vsl.latitude || !vsl.longitude) return;
+
+    const newVessel: Vessel = {
+      id: `DV-AI-${vsl.vessel_id.toString().padStart(2, '0')}`,
+      name: `AI DETECTED (${vsl.vessel_type.replace(/_/g, ' ').toUpperCase()})`,
+      vesselType: vsl.vessel_type.replace(/_/g, ' ').toUpperCase(),
+      lat: vsl.latitude,
+      lon: vsl.longitude,
+      heading: vsl.geolocation?.bearing_deg || 90,
+      speed: 12.0,
+      status: 'DARK',
+      length: 85,
+      mmsi: 'NONE (OPTICAL DETECTION)',
+      flag: 'UNKNOWN',
+      detectedByCamera: vsl.geolocation?.calibrated_camera_id,
+      confidence: Math.round(vsl.confidence * 100),
+      detectionSource: 'YOLO11n SeaShips Fine-Tuned Model',
+    };
+
+    setVessels((prev) => {
+      const exists = prev.some((v) => v.id === newVessel.id);
+      return exists ? prev.map((v) => (v.id === newVessel.id ? newVessel : v)) : [newVessel, ...prev];
+    });
+
+    flyToLocation(vsl.latitude, vsl.longitude, 11);
+    setSelectedVesselId(newVessel.id);
+    setIsAIDetectorOpen(false);
+
+    addAuditLog({
+      eventType: 'OPTICAL_SIGHTING',
+      targetId: newVessel.id,
+      action: `YOLO11n Model Classified ${vsl.vessel_type.toUpperCase()} (${(vsl.confidence * 100).toFixed(1)}% conf)`,
+      reason: 'OPTICAL_SIGHTING',
+      metadata: {
+        model: 'revenant_vessel_detector.pt',
+        confidence: vsl.confidence,
+        boundingBox: vsl.bounding_box,
+        centerPixel: vsl.center_pixel,
+        geolocation: vsl.geolocation,
+      },
     });
   };
 
@@ -1203,6 +1255,10 @@ export const App: React.FC = () => {
         activeAlertCount={activeAlertCount}
         activePanel={activeSidebarPanel}
         onTogglePanel={setActiveSidebarPanel}
+        onOpenAIDetector={() => {
+          setAiDetectorCamera(null);
+          setIsAIDetectorOpen(true);
+        }}
       />
 
       {/* 1. SINGLE ACTIVE SIDEBAR PANEL SYSTEM (Requirements 1–7) */}
@@ -1365,6 +1421,21 @@ export const App: React.FC = () => {
       <CameraFeedModal
         camera={activeFeedCamera}
         onClose={() => setActiveFeedCamera(null)}
+        onAnalyzeWithML={(cam) => {
+          setAiDetectorCamera(cam);
+          setIsAIDetectorOpen(true);
+        }}
+      />
+
+      {/* Real Fine-Tuned YOLO11n AI Vessel Detection & Geolocation Modal */}
+      <AIVesselDetectionModal
+        isOpen={isAIDetectorOpen}
+        onClose={() => {
+          setIsAIDetectorOpen(false);
+          setAiDetectorCamera(null);
+        }}
+        preselectedCamera={aiDetectorCamera}
+        onPlotVesselOnMap={handlePlotAIVessel}
       />
 
       {/* Drawing Mode Status & Close Prompt */}

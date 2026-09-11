@@ -12,6 +12,16 @@ export default defineConfig({
       allow: ['..'],
     },
     proxy: {
+      '/api/ml': {
+        target: 'http://localhost:8000',
+        changeOrigin: true,
+        secure: false,
+      },
+      '/results': {
+        target: 'http://localhost:8000',
+        changeOrigin: true,
+        secure: false,
+      },
       '/api': {
         target: 'http://localhost:5000',
         changeOrigin: true,

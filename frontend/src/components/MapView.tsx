@@ -1,8 +1,5 @@
 import React, { useEffect, useRef, useCallback } from 'react';
 import * as maplibregl from 'maplibre-gl';
-
-// Configure MapLibre Web Worker directly from public assets
-maplibregl.config.WORKER_URL = '/maplibre-gl-worker.mjs';
 import { Vessel } from '../data/vessels';
 import { MOCK_CAMERAS } from '../data/mockCameras';
 import { EOCamera, RestrictedArea } from '../types/maritime';
@@ -114,8 +111,8 @@ export const MapView: React.FC<MapViewProps> = ({
           },
         ],
       },
-      center: [79.2000, 15.6000], // Full Indian Subcontinent coastline (Gujarat to Bengal, Lakshadweep & Sri Lanka)
-      zoom: 4.7,
+      center: [78.9629, 12.0000], // Centered on Southern India & Indian Ocean
+      zoom: 5.4,
       minZoom: 2,
       maxZoom: 18,
       attributionControl: false,

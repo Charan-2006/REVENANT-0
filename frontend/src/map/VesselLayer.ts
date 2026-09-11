@@ -8,46 +8,38 @@ import {
 import { maritimeZoneEngine } from '../utils/maritimeZones';
 
 /**
- * Creates a crisp 32x32px ImageData ship icon for MapLibre symbol layer.
+ * Creates a compact 16x16px SVG ship image element for MapLibre symbol layer.
  * Top-down maritime vessel silhouette pointing North (0°).
  * Pure minimal geometry: Pointed bow (▲), angled flare (/ \), straight sides (| |), flat stern (|_|).
- * Perfectly symmetric and centered at (16, 16) for wobble-free map rotation.
- * Generated synchronously via HTML5 Canvas to eliminate WebGL texture loading/revocation issues.
+ * Perfectly symmetric and centered at (8, 8) for wobble-free map rotation.
  */
-export function createShipImageData(fillColor: string, strokeColor: string, size = 32): ImageData {
-  const canvas = document.createElement('canvas');
-  canvas.width = size;
-  canvas.height = size;
-  const ctx = canvas.getContext('2d', { willReadFrequently: true })!;
+export function createShipSvgImage(fillColor: string, strokeColor: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const svgString = `
+      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none">
+        <path
+          d="M8 1.5 L12.5 6 L12.5 14.5 L3.5 14.5 L3.5 6 Z"
+          fill="${fillColor}"
+          stroke="${strokeColor}"
+          stroke-width="0.6"
+          stroke-linejoin="round"
+        />
+      </svg>
+    `;
 
-  ctx.clearRect(0, 0, size, size);
-
-  // Vessel silhouette pointing North (0°)
-  const w = size;
-  const h = size;
-
-  ctx.beginPath();
-  // Pointed Bow
-  ctx.moveTo(w * 0.50, h * 0.08);
-  // Starboard Flare
-  ctx.lineTo(w * 0.82, h * 0.36);
-  // Starboard Side
-  ctx.lineTo(w * 0.82, h * 0.88);
-  // Flat Transom Stern
-  ctx.lineTo(w * 0.18, h * 0.88);
-  // Port Side
-  ctx.lineTo(w * 0.18, h * 0.36);
-  ctx.closePath();
-
-  ctx.fillStyle = fillColor;
-  ctx.fill();
-
-  ctx.strokeStyle = strokeColor;
-  ctx.lineWidth = 1.8;
-  ctx.lineJoin = 'round';
-  ctx.stroke();
-
-  return ctx.getImageData(0, 0, size, size);
+    const blob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const img = new Image();
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      resolve(img);
+    };
+    img.onerror = (err) => {
+      URL.revokeObjectURL(url);
+      reject(err);
+    };
+    img.src = url;
+  });
 }
 
 export interface VesselLayerOptions {
@@ -84,11 +76,11 @@ export class VesselLayerController {
   public async init(): Promise<void> {
     if (this.isInitialized || !this.map) return;
 
-    // 1. Register vector ship icons synchronously via Canvas ImageData
+    // 1. Register vector ship icons
     try {
-      const correlatedImg = createShipImageData('#090d16', '#38bdf8', 32); // Deep dark navy/black with maritime border
-      const darkImg = createShipImageData('#dc2626', '#fca5a5', 32);       // High-contrast red with bright edge
-      const restrictedImg = createShipImageData('#ea580c', '#fdba74', 32); // Vivid orange with light edge
+      const correlatedImg = await createShipSvgImage('#0f172a', '#020617'); // Dark Navy / Black
+      const darkImg = await createShipSvgImage('#dc2626', '#991b1b');       // Red (Dark vessel detection)
+      const restrictedImg = await createShipSvgImage('#f97316', '#c2410c'); // Orange (Restricted Area Violation)
 
       if (this.map.hasImage('vessel-correlated')) {
         this.map.removeImage('vessel-correlated');
@@ -105,7 +97,7 @@ export class VesselLayerController {
       }
       this.map.addImage('vessel-restricted', restrictedImg);
     } catch (e) {
-      console.error('Failed to register vessel canvas images', e);
+      console.error('Failed to register vessel SVG images', e);
     }
 
     // 2. Add GeoJSON Vessel Source (Direct individual rendering, no clustering)
@@ -252,12 +244,13 @@ export class VesselLayerController {
             'interpolate',
             ['linear'],
             ['zoom'],
-            3, 0.50,   // ~16px at global zoom
-            4.5, 0.68, // ~22px at Indian subcontinent overview (matches console screenshot)
-            7, 0.82,   // ~26px at state/coastal sector
-            10, 0.95,  // ~30px at harbor/port approach
-            13, 1.05,  // ~34px
-            18, 1.10   // ~35px
+            3, 0.50,   // ~8.0px
+            5, 0.65,   // ~10.4px (India / regional zoom: 8-12px)
+            7, 0.78,   // ~12.5px
+            9, 0.90,   // ~14.4px (closer coastal zoom: 10-16px)
+            11, 1.00,  // ~16.0px (10-16px)
+            13, 1.10,  // ~17.6px (max ~18px)
+            18, 1.10   // ~17.6px (flat cap: never exceeds 18px)
           ],
         },
       });
@@ -293,20 +286,20 @@ export class VesselLayerController {
         ? 'DARK VESSEL'
         : 'CORRELATED';
 
-      const dotColor = isRestricted ? '#f59e0b' : isDark ? '#ef4444' : '#10b981';
-      const textColor = isRestricted ? '#fbbf24' : isDark ? '#f87171' : '#34d399';
-      const borderColor = isRestricted ? 'rgba(245, 158, 11, 0.6)' : isDark ? 'rgba(239, 68, 68, 0.6)' : 'rgba(51, 65, 85, 0.8)';
+      const dotColor = isRestricted ? '#ea580c' : isDark ? '#dc2626' : '#059669';
+      const textColor = isRestricted ? '#c2410c' : isDark ? '#b91c1c' : '#047857';
+      const borderColor = isRestricted ? 'rgba(251, 146, 60, 0.8)' : isDark ? 'rgba(248, 113, 113, 0.8)' : 'rgba(203, 213, 225, 0.9)';
 
       const html = `
-        <div class="maritime-vessel-popup" style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; min-width: 110px; padding: 5px 8px; border-radius: 4px; background: rgba(15, 23, 42, 0.96); border: 1px solid ${borderColor}; box-shadow: 0 4px 14px rgba(0,0,0,0.5); line-height: 1.25; backdrop-filter: blur(8px);">
-          <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 3px;">
-            <span style="font-family: ui-monospace, SFMono-Regular, monospace; font-size: 10px; font-weight: 700; color: #f1f5f9; letter-spacing: 0.04em;">${vesselId}</span>
-            <span style="display: flex; align-items: center; gap: 3.5px; font-size: 8.5px; font-weight: 700; color: ${textColor}; text-transform: uppercase;">
+        <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; min-width: 105px; padding: 4px 7px; border-radius: 4px; background: rgba(255, 255, 255, 0.98); border: 1px solid ${borderColor}; box-shadow: 0 4px 12px rgba(0,0,0,0.15); line-height: 1.25; backdrop-filter: blur(8px);">
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 2px;">
+            <span style="font-family: ui-monospace, SFMono-Regular, monospace; font-size: 10px; font-weight: 700; color: #0f172a; letter-spacing: 0.04em;">${vesselId}</span>
+            <span style="display: flex; align-items: center; gap: 3.5px; font-size: 8px; font-weight: 700; color: ${textColor}; text-transform: uppercase;">
               <span style="display: inline-block; width: 5px; height: 5px; border-radius: 50%; background: ${dotColor};"></span>
               ${statusText}
             </span>
           </div>
-          <div style="font-size: 9px; color: #94a3b8; font-weight: 500;">
+          <div style="font-size: 9px; color: #64748b; font-weight: 500;">
             ${vesselType}
           </div>
         </div>

@@ -1,14 +1,15 @@
 import React from 'react';
 import { EOCamera } from '../types/maritime';
-import { X } from 'lucide-react';
+import { X, Scan } from 'lucide-react';
 import { SatelliteImage } from './SatelliteImage';
 
 interface CameraFeedModalProps {
   camera: EOCamera | null;
   onClose: () => void;
+  onAnalyzeWithML?: (camera: EOCamera) => void;
 }
 
-export const CameraFeedModal: React.FC<CameraFeedModalProps> = ({ camera, onClose }) => {
+export const CameraFeedModal: React.FC<CameraFeedModalProps> = ({ camera, onClose, onAnalyzeWithML }) => {
   if (!camera) return null;
 
   return (
@@ -75,8 +76,19 @@ export const CameraFeedModal: React.FC<CameraFeedModalProps> = ({ camera, onClos
             <span className="text-sky-400 font-mono font-semibold">12 NM Territorial Waters</span>
           </div>
 
+          {onAnalyzeWithML && (
+            <button
+              type="button"
+              onClick={() => onAnalyzeWithML(camera)}
+              className="w-full py-2 px-3 bg-sky-600 hover:bg-sky-500 text-white rounded font-bold text-[11px] flex items-center justify-center gap-2 shadow-sm transition-all active:scale-98"
+            >
+              <Scan className="w-3.5 h-3.5" />
+              <span>RUN REAL YOLO11n VESSEL DETECTOR</span>
+            </button>
+          )}
+
           <div className="text-[8.5px] text-slate-500 bg-[#0b111e] p-1.5 rounded border border-slate-800 text-center">
-            Simulated demonstration optical feed with bounding box detection overlay.
+            Coastal optical feed with real-time YOLO11n SeaShips detector & geolocation calibration.
           </div>
         </div>
       </div>
