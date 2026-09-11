@@ -358,6 +358,7 @@ export class PatrolLayerController {
     }
 
     this.bindEvents();
+    this.bringToFront();
     this.isInitialized = true;
 
     // Apply any intercept vector that arrived before the style finished loading.
@@ -367,6 +368,28 @@ export class PatrolLayerController {
     this.setSelectedPatrol(this.selectedPatrolId);
 
     this.startAnimation();
+  }
+
+  /**
+   * Raises all patrol tactical layers to top of layer hierarchy
+   */
+  public bringToFront(): void {
+    if (!this.map) return;
+    const layerIds = [
+      'patrol-intercept-line',
+      'patrol-units-ring',
+      'patrol-units-strobe',
+      'patrol-units-layer',
+    ];
+    layerIds.forEach((id) => {
+      if (this.map.getLayer(id)) {
+        try {
+          this.map.moveLayer(id);
+        } catch {
+          // Ignore
+        }
+      }
+    });
   }
 
   /**

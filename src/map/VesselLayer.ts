@@ -13,6 +13,34 @@ import { maritimeZoneEngine } from '../utils/maritimeZones';
  * Pure minimal geometry: Pointed bow (▲), angled flare (/ \), straight sides (| |), flat stern (|_|).
  * Perfectly symmetric and centered at (8, 8) for wobble-free map rotation.
  */
+export function createShipImageData(fillColor: string, strokeColor: string): ImageData {
+  const canvas = document.createElement('canvas');
+  canvas.width = 32;
+  canvas.height = 32;
+  const ctx = canvas.getContext('2d', { willReadFrequently: true })!;
+  ctx.clearRect(0, 0, 32, 32);
+  ctx.fillStyle = fillColor;
+  ctx.strokeStyle = strokeColor;
+  ctx.lineWidth = 1.5;
+
+  // Symmetric top-down vessel icon pointing north
+  ctx.beginPath();
+  ctx.moveTo(16, 2);   // Bow
+  ctx.lineTo(26, 11);  // Starboard flare
+  ctx.lineTo(26, 30);  // Starboard stern
+  ctx.lineTo(6, 30);   // Port stern
+  ctx.lineTo(6, 11);   // Port flare
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+
+  // Wheelhouse cabin
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(13, 17, 6, 6);
+
+  return ctx.getImageData(0, 0, 32, 32);
+}
+
 export function createShipSvgImage(fillColor: string, strokeColor: string): Promise<HTMLImageElement> {
   return new Promise((resolve) => {
     const canvas = document.createElement('canvas');
@@ -29,18 +57,16 @@ export function createShipSvgImage(fillColor: string, strokeColor: string): Prom
     ctx.strokeStyle = strokeColor;
     ctx.lineWidth = 1.5;
 
-    // Symmetric top-down vessel icon pointing north
     ctx.beginPath();
-    ctx.moveTo(16, 2);   // Bow
-    ctx.lineTo(26, 11);  // Starboard flare
-    ctx.lineTo(26, 30);  // Starboard stern
-    ctx.lineTo(6, 30);   // Port stern
-    ctx.lineTo(6, 11);   // Port flare
+    ctx.moveTo(16, 2);
+    ctx.lineTo(26, 11);
+    ctx.lineTo(26, 30);
+    ctx.lineTo(6, 30);
+    ctx.lineTo(6, 11);
     ctx.closePath();
     ctx.fill();
     ctx.stroke();
 
-    // Wheelhouse cabin
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(13, 17, 6, 6);
 
@@ -80,16 +106,41 @@ export class VesselLayerController {
   }
 
   /**
+   * Raises all vessel layers to the top of the layer hierarchy
+   */
+  public bringToFront(): void {
+    if (!this.map) return;
+    const layerIds = [
+      'ais-track-line',
+      'ais-track-points',
+      'dark-track-line',
+      'dark-track-points',
+      'selected-vessel-ring',
+      'vessels-core-dot',
+      'vessels-layer',
+    ];
+    layerIds.forEach((id) => {
+      if (this.map.getLayer(id)) {
+        try {
+          this.map.moveLayer(id);
+        } catch {
+          // Ignore if cannot move
+        }
+      }
+    });
+  }
+
+  /**
    * Initializes MapLibre sources, layers, and event listeners
    */
   public async init(): Promise<void> {
     if (this.isInitialized || !this.map) return;
 
-    // 1. Register vector ship icons
+    // 1. Register vector ship icons synchronously via ImageData
     try {
-      const correlatedImg = await createShipSvgImage('#0f172a', '#38bdf8'); // Dark Navy with Cyan outline
-      const darkImg = await createShipSvgImage('#dc2626', '#fca5a5');       // Red (Dark vessel detection)
-      const restrictedImg = await createShipSvgImage('#f97316', '#fed7aa'); // Orange (Restricted Area Violation)
+      const correlatedImg = createShipImageData('#0f172a', '#38bdf8'); // Dark Navy with Cyan outline
+      const darkImg = createShipImageData('#dc2626', '#fca5a5');       // Red (Dark vessel detection)
+      const restrictedImg = createShipImageData('#f97316', '#fed7aa'); // Orange (Restricted Area Violation)
 
       if (this.map.hasImage('vessel-correlated')) {
         this.map.removeImage('vessel-correlated');
@@ -298,6 +349,7 @@ export class VesselLayerController {
     }
 
     this.bindEvents();
+    this.bringToFront();
     this.isInitialized = true;
   }
 

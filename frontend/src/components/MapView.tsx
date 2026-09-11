@@ -139,6 +139,7 @@ export const MapView: React.FC<MapViewProps> = ({
     });
 
     mapInstanceRef.current = map;
+    (window as any).__map = map;
 
     map.on('mousemove', (e: any) => {
       onCursorMove({ lat: e.lngLat.lat, lon: e.lngLat.lng });
@@ -185,83 +186,131 @@ export const MapView: React.FC<MapViewProps> = ({
       }
     });
 
-    map.on('load', async () => {
+    const initControllers = async () => {
+      if (!mapInstanceRef.current) return;
+      console.log('[MAP_INIT] Initializing map layers and tactical controllers...');
+
       // 1. Initialize Maritime Boundaries (Global EEZ WMS, India EEZ Vector, 12 NM Territorial Sea)
-      const boundaryController = new MaritimeBoundaryLayerController({ map });
-      boundaryController.init();
-      boundaryControllerRef.current = boundaryController;
-
-      // 2. Initialize Coastal EO Cameras & FOVs (only selected camera shows FOV)
-      const cameraController = new CameraLayerController({
-        map,
-        cameras: MOCK_CAMERAS,
-        onSelectCamera: (cam) => {
-          if (onSelectCameraRef.current) onSelectCameraRef.current(cam);
-        },
-      });
-      await cameraController.init();
-      cameraController.setSelectedCamera(selectedCamera);
-      cameraControllerRef.current = cameraController;
-
-      // 3. Initialize Map-Native Vessel Tracking Layer (8–18px symbols, clusters, tracks)
-      const vesselController = new VesselLayerController({
-        map,
-        vessels,
-        onSelectVessel: (vsl) => {
-          if (onSelectVesselRef.current) onSelectVesselRef.current(vsl);
-        },
-      });
-      await vesselController.init();
-      vesselController.setSelectedVessel(selectedVesselId);
-      vesselControllerRef.current = vesselController;
-
-      // 4. Initialize Tactical Coastal Patrol Fleet Layer (Interceptors, Intercept Route, Status Rings)
-      const patrolController = new PatrolLayerController({
-        map,
-        patrolUnits,
-        onSelectPatrol: (patrol) => {
-          if (onSelectPatrolRef.current) onSelectPatrolRef.current(patrol);
-        },
-      });
-      await patrolController.init();
-      patrolController.setInterceptVector(activeIntercept);
-      patrolController.setSelectedPatrol(selectedPatrolId);
-      patrolControllerRef.current = patrolController;
-
-      // 5. Initialize Restricted Areas Layer (GeoJSON polygon, free-draw tool)
-      const restrictedController = new RestrictedAreaLayerController({
-        map,
-        restrictedAreas,
-        onSelectArea: (area) => {
-          if (onSelectRestrictedAreaRef.current) onSelectRestrictedAreaRef.current(area);
-        },
-        onDrawingComplete: (coords) => {
-          if (onDrawingCompleteRef.current) onDrawingCompleteRef.current(coords);
-        },
-        onDrawingCancel: () => {
-          if (onDrawingCancelRef.current) onDrawingCancelRef.current();
-        },
-        onDrawPointsChange: (pts) => {
-          if (onDrawPointsChangeRef.current) onDrawPointsChangeRef.current(pts);
-        },
-      });
-      restrictedController.init();
-      restrictedControllerRef.current = restrictedController;
-
-      if (onFinishDrawingRef) {
-        onFinishDrawingRef.current = () => {
-          restrictedController.finishDrawing();
-        };
+      try {
+        const boundaryController = new MaritimeBoundaryLayerController({ map });
+        boundaryController.init();
+        boundaryControllerRef.current = boundaryController;
+        boundaryController.setEezVisible(layers.eez);
+        boundaryController.setTerritorialSeaVisible(layers.territorialSea);
+        boundaryController.setContiguousZoneVisible(layers.contiguousZone);
+        console.log('[MAP_INIT] Maritime boundary layers ready');
+      } catch (err) {
+        console.error('[MAP_INIT] Boundary controller init error:', err);
       }
 
-      // Apply initial layer toggles
-      boundaryController.setEezVisible(layers.eez);
-      boundaryController.setTerritorialSeaVisible(layers.territorialSea);
-      boundaryController.setContiguousZoneVisible(layers.contiguousZone);
-      cameraController.setVisibility(layers.cameras);
-      vesselController.setVisibility(layers.vessels);
-      patrolController.setVisibility(layers.patrolUnits !== false);
-    });
+      // 2. Initialize Coastal EO Cameras & FOVs (only selected camera shows FOV)
+      try {
+        const cameraController = new CameraLayerController({
+          map,
+          cameras: MOCK_CAMERAS,
+          onSelectCamera: (cam) => {
+            if (onSelectCameraRef.current) onSelectCameraRef.current(cam);
+          },
+        });
+        await cameraController.init();
+        cameraController.setSelectedCamera(selectedCamera);
+        cameraController.setVisibility(layers.cameras);
+        cameraController.bringToFront();
+        cameraControllerRef.current = cameraController;
+        console.log('[MAP_INIT] Camera layer ready (87 DGLL stations)');
+      } catch (err) {
+        console.error('[MAP_INIT] Camera controller init error:', err);
+      }
+
+      // 3. Initialize Map-Native Vessel Tracking Layer (8–18px symbols, clusters, tracks)
+      try {
+        const vesselController = new VesselLayerController({
+          map,
+          vessels,
+          onSelectVessel: (vsl) => {
+            if (onSelectVesselRef.current) onSelectVesselRef.current(vsl);
+          },
+        });
+        await vesselController.init();
+        vesselController.setSelectedVessel(selectedVesselId);
+        vesselController.setVisibility(layers.vessels);
+        vesselController.bringToFront();
+        vesselControllerRef.current = vesselController;
+        console.log('[MAP_INIT] Vessel layer ready (107 verified vessels)');
+      } catch (err) {
+        console.error('[MAP_INIT] Vessel controller init error:', err);
+      }
+
+      // 4. Initialize Tactical Coastal Patrol Fleet Layer (Interceptors, Intercept Route, Status Rings)
+      try {
+        const patrolController = new PatrolLayerController({
+          map,
+          patrolUnits,
+          onSelectPatrol: (patrol) => {
+            if (onSelectPatrolRef.current) onSelectPatrolRef.current(patrol);
+          },
+        });
+        await patrolController.init();
+        patrolController.setInterceptVector(activeIntercept);
+        patrolController.setSelectedPatrol(selectedPatrolId);
+        patrolController.setVisibility(layers.patrolUnits !== false);
+        patrolController.bringToFront();
+        patrolControllerRef.current = patrolController;
+        console.log('[MAP_INIT] Patrol layer ready');
+      } catch (err) {
+        console.error('[MAP_INIT] Patrol controller init error:', err);
+      }
+
+      // 5. Initialize Restricted Areas Layer (GeoJSON polygon, free-draw tool)
+      try {
+        const restrictedController = new RestrictedAreaLayerController({
+          map,
+          restrictedAreas,
+          onSelectArea: (area) => {
+            if (onSelectRestrictedAreaRef.current) onSelectRestrictedAreaRef.current(area);
+          },
+          onDrawingComplete: (coords) => {
+            if (onDrawingCompleteRef.current) onDrawingCompleteRef.current(coords);
+          },
+          onDrawingCancel: () => {
+            if (onDrawingCancelRef.current) onDrawingCancelRef.current();
+          },
+          onDrawPointsChange: (pts) => {
+            if (onDrawPointsChangeRef.current) onDrawPointsChangeRef.current(pts);
+          },
+        });
+        restrictedController.init();
+        restrictedControllerRef.current = restrictedController;
+
+        if (onFinishDrawingRef) {
+          onFinishDrawingRef.current = () => {
+            restrictedController.finishDrawing();
+          };
+        }
+        console.log('[MAP_INIT] Restricted areas layer ready');
+      } catch (err) {
+        console.error('[MAP_INIT] Restricted controller init error:', err);
+      }
+    };
+
+    let initialized = false;
+    const safeInit = () => {
+      if (initialized) return;
+      initialized = true;
+      initControllers();
+    };
+
+    if (map.loaded()) {
+      safeInit();
+    } else {
+      map.once('load', safeInit);
+      // Fallback timeout in case 'load' event was already dispatched before listener attached
+      setTimeout(() => {
+        if (!initialized && mapInstanceRef.current) {
+          safeInit();
+        }
+      }, 500);
+    }
 
     return () => {
       // Stop the patrol tactical animation loop before the map is torn down.
