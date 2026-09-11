@@ -1,12 +1,18 @@
 import React, { useState } from 'react';
-import { ShieldAlert, Check, Clock } from 'lucide-react';
+import { ShieldAlert, Check, Clock, Calendar } from 'lucide-react';
 import { Modal } from './Modal';
 import { ZoneType } from '../types/maritime';
 
 interface SaveAreaModalProps {
   isOpen: boolean;
   defaultName: string;
-  onSave: (name: string, zoneType: ZoneType, expiresInMinutes?: number) => void;
+  onSave: (
+    name: string,
+    zoneType: ZoneType,
+    expiresInMinutes?: number,
+    startTime?: string,
+    expiresAt?: string
+  ) => void;
   onCancel: () => void;
 }
 
@@ -18,7 +24,10 @@ export const SaveAreaModal: React.FC<SaveAreaModalProps> = ({
 }) => {
   const [areaName, setAreaName] = useState(defaultName);
   const [zoneType, setZoneType] = useState<ZoneType>('RED');
-  const [expiryOption, setExpiryOption] = useState<string>('NONE');
+  const [durationOption, setDurationOption] = useState<string>('NONE');
+  const [startOption, setStartOption] = useState<'NOW' | '15m' | '1h' | 'CUSTOM'>('NOW');
+  const [customStart, setCustomStart] = useState<string>('');
+  const [customEnd, setCustomEnd] = useState<string>('');
 
   if (!isOpen) return null;
 
@@ -26,24 +35,48 @@ export const SaveAreaModal: React.FC<SaveAreaModalProps> = ({
     e.preventDefault();
     if (!areaName.trim()) return;
 
-    let mins: number | undefined = undefined;
-    if (expiryOption === '1m') mins = 1;
-    else if (expiryOption === '5m') mins = 5;
-    else if (expiryOption === '10m') mins = 10;
-    else if (expiryOption === '15m') mins = 15;
-    else if (expiryOption === '30m') mins = 30;
-    else if (expiryOption === '60m') mins = 60;
+    let startDate = new Date();
+    if (startOption === '15m') {
+      startDate = new Date(Date.now() + 15 * 60 * 1000);
+    } else if (startOption === '1h') {
+      startDate = new Date(Date.now() + 60 * 60 * 1000);
+    } else if (startOption === 'CUSTOM' && customStart) {
+      startDate = new Date(customStart);
+    }
 
-    onSave(areaName.trim(), zoneType, mins);
+    let endDate: Date | undefined = undefined;
+    let mins: number | undefined = undefined;
+
+    if (durationOption === '15m') mins = 15;
+    else if (durationOption === '30m') mins = 30;
+    else if (durationOption === '1h') mins = 60;
+    else if (durationOption === '4h') mins = 240;
+    else if (durationOption === '24h') mins = 1440;
+    else if (durationOption === 'CUSTOM' && customEnd) {
+      const eD = new Date(customEnd);
+      if (!isNaN(eD.getTime()) && eD.getTime() > startDate.getTime()) {
+        endDate = eD;
+        mins = Math.round((eD.getTime() - startDate.getTime()) / (60 * 1000));
+      }
+    }
+
+    if (mins && !endDate) {
+      endDate = new Date(startDate.getTime() + mins * 60 * 1000);
+    }
+
+    const startIso = startDate.toISOString();
+    const endIso = endDate ? endDate.toISOString() : undefined;
+
+    onSave(areaName.trim(), zoneType, mins, startIso, endIso);
   };
 
   return (
     <Modal
       isOpen={isOpen}
       onClose={onCancel}
-      title="Save Maritime Geofence Zone"
+      title="Establish Maritime Geofence Zone"
       icon={<ShieldAlert className="w-4 h-4 text-amber-400" />}
-      maxWidth="max-w-sm"
+      maxWidth="max-w-md"
     >
       <form onSubmit={handleSubmit} className="space-y-3 text-[11px] text-slate-200 font-sans">
         {/* Zone Name */}
@@ -89,36 +122,94 @@ export const SaveAreaModal: React.FC<SaveAreaModalProps> = ({
           </div>
         </div>
 
-        {/* Automatic Expiry Handling */}
-        <div>
-          <div className="flex items-center justify-between mb-1">
-            <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
+        {/* ------------------------------------------------------------- */}
+        {/* TIME RANGE & OPERATIONAL WINDOW CONFIGURATION                 */}
+        {/* ------------------------------------------------------------- */}
+        <div className="p-2.5 bg-[#0b111e] border border-slate-800 rounded space-y-2">
+          <div className="flex items-center justify-between">
+            <label className="text-[9px] font-bold text-sky-400 uppercase tracking-wider flex items-center gap-1">
               <Clock className="w-3 h-3 text-sky-400" />
-              <span>Zone Auto-Expiry</span>
+              <span>Operational Time Range & Validity</span>
             </label>
-            <span className="text-[8px] text-slate-500 font-mono">Optional</span>
+            <span className="text-[8px] text-slate-500 font-mono">Temporal Geofence</span>
           </div>
-          <div className="grid grid-cols-5 gap-1 text-[10px] font-mono">
-            {[
-              { id: '1m', label: '1m' },
-              { id: '5m', label: '5m' },
-              { id: '15m', label: '15m' },
-              { id: '60m', label: '1h' },
-              { id: 'NONE', label: 'Perm' },
-            ].map((opt) => (
-              <button
-                key={opt.id}
-                type="button"
-                onClick={() => setExpiryOption(opt.id)}
-                className={`py-1 rounded border text-center transition-colors ${
-                  expiryOption === opt.id
-                    ? 'border-sky-500 bg-sky-950 text-sky-200 font-bold'
-                    : 'border-slate-800 bg-[#111827] text-slate-400 hover:border-slate-700'
-                }`}
-              >
-                {opt.label}
-              </button>
-            ))}
+
+          {/* Start Time Mode */}
+          <div>
+            <span className="text-[8.5px] font-mono text-slate-400 uppercase block mb-1">
+              Window Activation Time:
+            </span>
+            <div className="grid grid-cols-4 gap-1 font-mono text-[9px]">
+              {[
+                { id: 'NOW', label: 'Immediate' },
+                { id: '15m', label: '+15m Delay' },
+                { id: '1h', label: '+1h Delay' },
+                { id: 'CUSTOM', label: 'Custom' },
+              ].map((opt) => (
+                <button
+                  key={opt.id}
+                  type="button"
+                  onClick={() => setStartOption(opt.id as any)}
+                  className={`py-1 rounded border text-center transition-colors ${
+                    startOption === opt.id
+                      ? 'border-sky-500 bg-sky-950 text-sky-200 font-bold'
+                      : 'border-slate-800 bg-[#111827] text-slate-400 hover:border-slate-700'
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+
+            {startOption === 'CUSTOM' && (
+              <input
+                type="datetime-local"
+                value={customStart}
+                onChange={(e) => setCustomStart(e.target.value)}
+                className="w-full mt-1.5 px-2 py-1 bg-[#0f172a] border border-slate-700 rounded text-slate-200 font-mono text-[9.5px] focus:outline-none focus:border-sky-500"
+              />
+            )}
+          </div>
+
+          {/* Validity Duration / Expiration */}
+          <div>
+            <span className="text-[8.5px] font-mono text-slate-400 uppercase block mb-1">
+              Active Duration / Expiry:
+            </span>
+            <div className="grid grid-cols-7 gap-1 text-[9px] font-mono">
+              {[
+                { id: '15m', label: '15m' },
+                { id: '30m', label: '30m' },
+                { id: '1h', label: '1h' },
+                { id: '4h', label: '4h' },
+                { id: '24h', label: '24h' },
+                { id: 'NONE', label: 'Perm' },
+                { id: 'CUSTOM', label: 'Date' },
+              ].map((opt) => (
+                <button
+                  key={opt.id}
+                  type="button"
+                  onClick={() => setDurationOption(opt.id)}
+                  className={`py-1 rounded border text-center transition-colors ${
+                    durationOption === opt.id
+                      ? 'border-amber-500 bg-amber-950 text-amber-200 font-bold'
+                      : 'border-slate-800 bg-[#111827] text-slate-400 hover:border-slate-700'
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+
+            {durationOption === 'CUSTOM' && (
+              <input
+                type="datetime-local"
+                value={customEnd}
+                onChange={(e) => setCustomEnd(e.target.value)}
+                className="w-full mt-1.5 px-2 py-1 bg-[#0f172a] border border-slate-700 rounded text-slate-200 font-mono text-[9.5px] focus:outline-none focus:border-sky-500"
+                placeholder="End date and time"
+              />
+            )}
           </div>
         </div>
 

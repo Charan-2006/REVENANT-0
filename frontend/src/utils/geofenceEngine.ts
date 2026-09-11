@@ -54,11 +54,16 @@ export function evaluateVesselGeofence(
   isOutOfEnvelope: boolean;
   violations: string[];
 } {
+  const now = Date.now();
   const activeAreas = restrictedAreas.filter((area) => {
     if (area.status !== 'ACTIVE') return false;
+    if (area.startTime) {
+      const start = new Date(area.startTime).getTime();
+      if (!isNaN(start) && now < start) return false;
+    }
     if (area.expiresAt) {
       const exp = new Date(area.expiresAt).getTime();
-      if (!isNaN(exp) && Date.now() > exp) return false;
+      if (!isNaN(exp) && now > exp) return false;
     }
     return true;
   });

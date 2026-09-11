@@ -417,14 +417,21 @@ export const App: React.FC = () => {
   // ---------------------------------------------------------------------------
   // SAVE ZONE (Requirement 2: Pure application state object with unique ID)
   // ---------------------------------------------------------------------------
-  const handleSaveArea = (name: string, zoneType: ZoneType, expiresInMinutes?: number) => {
+  const handleSaveArea = (
+    name: string,
+    zoneType: ZoneType,
+    expiresInMinutes?: number,
+    startTime?: string,
+    expiresAt?: string
+  ) => {
     if (!pendingPolygonCoords) return;
 
     const newId = `ZONE-${Date.now().toString(36).toUpperCase().slice(-5)}`;
     const nowTime = new Date().toISOString().replace('T', ' ').slice(11, 16) + ' UTC';
-    const expiresAt = expiresInMinutes
-      ? new Date(Date.now() + expiresInMinutes * 60 * 1000).toISOString()
-      : undefined;
+    const finalExpiresAt =
+      expiresAt ||
+      (expiresInMinutes ? new Date(Date.now() + expiresInMinutes * 60 * 1000).toISOString() : undefined);
+    const finalStartTime = startTime || new Date().toISOString();
 
     const newArea: RestrictedArea = {
       id: newId,
@@ -432,8 +439,10 @@ export const App: React.FC = () => {
       zoneType,
       status: 'ACTIVE',
       createdAt: nowTime,
-      expiresAt,
+      startTime: finalStartTime,
+      expiresAt: finalExpiresAt,
       expiresInMinutes,
+      timeRange: finalExpiresAt ? { start: finalStartTime, end: finalExpiresAt } : undefined,
       createdBy: 'OPERATOR-01',
       geometry: {
         type: 'Polygon',
@@ -448,9 +457,9 @@ export const App: React.FC = () => {
     addAuditLog({
       eventType: 'ZONE_CREATED',
       targetId: newId,
-      action: `Created ${zoneType} zone: ${name}`,
+      action: `Created ${zoneType} zone: ${name} (Window: ${finalStartTime.slice(11, 19)} to ${finalExpiresAt ? finalExpiresAt.slice(11, 19) : 'Perm'})`,
       reason: 'OPERATOR_CREATION',
-      metadata: { name, zoneType, expiresInMinutes },
+      metadata: { name, zoneType, expiresInMinutes, startTime: finalStartTime, expiresAt: finalExpiresAt },
     });
   };
 
@@ -526,6 +535,44 @@ export const App: React.FC = () => {
       action: `Updated zone properties: ${newName}`,
       reason: 'OPERATOR_EDIT',
       metadata: { newName, newType, expiresInMin },
+    });
+  };
+
+  const handleUpdateTimeRange = (
+    areaId: string,
+    startTime?: string,
+    expiresAt?: string,
+    expiresInMinutes?: number
+  ) => {
+    let updatedArea: RestrictedArea | undefined;
+    setRestrictedAreas((prev) =>
+      prev.map((a) => {
+        if (a.id === areaId) {
+          const sTime = startTime || a.startTime || new Date().toISOString();
+          updatedArea = {
+            ...a,
+            startTime: sTime,
+            expiresAt,
+            expiresInMinutes,
+            timeRange: sTime && expiresAt ? { start: sTime, end: expiresAt } : undefined,
+            status: 'ACTIVE' as const, // re-activate when time window is extended
+          };
+          return updatedArea;
+        }
+        return a;
+      })
+    );
+
+    if (selectedRestrictedArea?.id === areaId && updatedArea) {
+      setSelectedRestrictedArea(updatedArea);
+    }
+
+    addAuditLog({
+      eventType: 'ZONE_UPDATED',
+      targetId: areaId,
+      action: `Configured operational time range: ${startTime ? new Date(startTime).toISOString().slice(11, 19) : 'Immediate'} UTC to ${expiresAt ? new Date(expiresAt).toISOString().slice(11, 19) + ' UTC' : 'Permanent'}`,
+      reason: 'OPERATOR_TIME_RANGE_CONFIG',
+      metadata: { areaId, startTime, expiresAt, expiresInMinutes },
     });
   };
 
@@ -1403,6 +1450,7 @@ export const App: React.FC = () => {
         }}
         onToggleStatus={handleToggleAreaStatus}
         onDeleteArea={handleDeleteArea}
+        onUpdateTimeRange={handleUpdateTimeRange}
       />
 
       {/* 3. CENTERED MODALS (Requirement 10) */}

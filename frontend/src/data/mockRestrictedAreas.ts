@@ -14,6 +14,7 @@ export const INITIAL_RESTRICTED_AREAS: RestrictedArea[] = [
     zoneType: 'RED',
     status: 'ACTIVE',
     createdAt: '14:10 UTC',
+    startTime: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
     createdBy: 'OPERATOR-01',
     geometry: {
       type: 'Polygon',
@@ -34,8 +35,13 @@ export const INITIAL_RESTRICTED_AREAS: RestrictedArea[] = [
     zoneType: 'YELLOW',
     status: 'ACTIVE',
     createdAt: '14:20 UTC',
-    expiresAt: new Date(Date.now() + 10 * 60 * 1000).toISOString(), // 10 minutes temporary expiry
-    expiresInMinutes: 10,
+    startTime: new Date(Date.now() - 5 * 60 * 1000).toISOString(),
+    expiresAt: new Date(Date.now() + 25 * 60 * 1000).toISOString(), // 30 minutes total validity window
+    expiresInMinutes: 30,
+    timeRange: {
+      start: new Date(Date.now() - 5 * 60 * 1000).toISOString(),
+      end: new Date(Date.now() + 25 * 60 * 1000).toISOString(),
+    },
     createdBy: 'OPERATOR-01',
     geometry: {
       type: 'Polygon',
@@ -56,6 +62,7 @@ export const INITIAL_RESTRICTED_AREAS: RestrictedArea[] = [
     zoneType: 'GREEN',
     status: 'ACTIVE',
     createdAt: '14:00 UTC',
+    startTime: new Date(Date.now() - 120 * 60 * 1000).toISOString(),
     createdBy: 'OPERATOR-01',
     geometry: {
       type: 'Polygon',

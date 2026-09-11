@@ -135,8 +135,13 @@ export interface RestrictedArea {
   };
   status: ZoneStatus;
   createdAt: string;
+  startTime?: string; // ISO timestamp or UTC string
   expiresAt?: string; // ISO timestamp
   expiresInMinutes?: number;
+  timeRange?: {
+    start: string;
+    end: string;
+  };
   createdBy: string;
 }
 

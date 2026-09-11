@@ -293,12 +293,23 @@ export const ZoneManagerPanel: React.FC<ZoneManagerPanelProps> = ({
                       <span className="text-[8.5px] font-mono text-slate-400">{area.id}</span>
                     </div>
 
-                    <div className="flex items-center justify-between text-[10px] text-slate-400 mb-2">
-                      <div className="flex items-center gap-1 font-mono">
-                        <Clock className="w-3 h-3 text-slate-400" />
-                        <span>{isExpired ? 'EXPIRED' : remaining}</span>
+                    <div className="bg-[#0b111e] p-1.5 rounded border border-slate-800/80 mb-2 space-y-1">
+                      <div className="flex items-center justify-between text-[8.5px] text-slate-400 font-mono">
+                        <span className="flex items-center gap-1">
+                          <Clock className="w-2.5 h-2.5 text-sky-400" />
+                          <span>Window:</span>
+                        </span>
+                        <span className="text-slate-300 font-medium">
+                          {area.startTime ? new Date(area.startTime).toISOString().replace('T', ' ').slice(11, 16) : 'Immediate'} UTC →{' '}
+                          {area.expiresAt ? new Date(area.expiresAt).toISOString().replace('T', ' ').slice(11, 16) + ' UTC' : 'Permanent'}
+                        </span>
                       </div>
-                      <span className="text-slate-400">By: {area.createdBy || 'OP-01'}</span>
+                      <div className="flex items-center justify-between text-[8.5px] font-mono">
+                        <span className="text-slate-400">Status:</span>
+                        <span className={isExpired ? 'text-rose-400 font-bold' : 'text-sky-300 font-semibold'}>
+                          {isExpired ? 'EXPIRED' : remaining}
+                        </span>
+                      </div>
                     </div>
 
                     {/* Action Bar */}
@@ -306,10 +317,10 @@ export const ZoneManagerPanel: React.FC<ZoneManagerPanelProps> = ({
                       <button
                         onClick={() => onFlyToArea(area)}
                         className="flex items-center gap-1 px-1.5 py-0.5 rounded text-sky-400 hover:text-sky-300 hover:bg-slate-800/60 transition-colors"
-                        title="Center map on this zone"
+                        title="Center map and open Time Range details for this zone"
                       >
                         <Compass className="w-3 h-3" />
-                        <span>Locate</span>
+                        <span>Select & Time Range</span>
                       </button>
 
                       <div className="flex items-center gap-1">
