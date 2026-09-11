@@ -8,6 +8,7 @@ export interface MapLayersState {
   vessels: boolean;
   cameras: boolean;
   contiguousZone: boolean;
+  patrolUnits: boolean;
 }
 
 interface LayerControlPopoverProps {
@@ -25,6 +26,7 @@ export const LayerControlPopover: React.FC<LayerControlPopoverProps> = ({
 }) => {
   const layerItems: { key: keyof MapLayersState; label: string; sub?: string }[] = [
     { key: 'vessels', label: 'VESSEL TARGETS', sub: 'AIS Correlated & Uncorrelated Optical Contacts' },
+    { key: 'patrolUnits', label: 'COASTAL PATROL CRAFT', sub: 'Indian Coast Guard & Marine Police Fast Interceptors' },
     { key: 'cameras', label: 'OPTICAL SENSOR SITES', sub: '87 Physical Shore Stations • DGLL NAIS' },
     { key: 'eez', label: 'EEZ BOUNDARIES (200 NM)', sub: 'Exclusive Economic Zone Outer Limits' },
     { key: 'territorialSea', label: '12 NM TERRITORIAL SEA', sub: 'Sovereign Coastal Waters' },

@@ -14,7 +14,7 @@ export const AuditLogDrawer: React.FC<AuditLogDrawerProps> = ({
   onClose,
   auditLogs,
 }) => {
-  const [filterType, setFilterType] = useState<'ALL' | 'ZONES' | 'ALERTS' | 'CORRELATION'>('ALL');
+  const [filterType, setFilterType] = useState<'ALL' | 'ZONES' | 'ALERTS' | 'PATROL' | 'CORRELATION'>('ALL');
   const [searchTerm, setSearchTerm] = useState('');
 
   if (!isOpen) return null;
@@ -24,6 +24,8 @@ export const AuditLogDrawer: React.FC<AuditLogDrawerProps> = ({
       if (!log.eventType.startsWith('ZONE_') && !log.eventType.includes('ZONE')) return false;
     } else if (filterType === 'ALERTS') {
       if (!log.eventType.startsWith('ALERT_')) return false;
+    } else if (filterType === 'PATROL') {
+      if (!log.eventType.startsWith('PATROL_')) return false;
     } else if (filterType === 'CORRELATION') {
       if (!log.eventType.includes('CORRELATION')) return false;
     }
@@ -72,7 +74,7 @@ export const AuditLogDrawer: React.FC<AuditLogDrawerProps> = ({
       {/* Filter / Search Bar */}
       <div className="px-3 py-1.5 bg-[#0b111e] border-b border-slate-800 flex items-center justify-between gap-2 text-[10px]">
         <div className="flex items-center gap-1 font-mono">
-          {(['ALL', 'ZONES', 'ALERTS', 'CORRELATION'] as const).map((cat) => (
+          {(['ALL', 'ZONES', 'ALERTS', 'PATROL', 'CORRELATION'] as const).map((cat) => (
             <button
               key={cat}
               onClick={() => setFilterType(cat)}
@@ -103,12 +105,18 @@ export const AuditLogDrawer: React.FC<AuditLogDrawerProps> = ({
           </div>
         ) : (
           [...filteredLogs].reverse().map((log) => {
+            const isBlindSpot = log.eventType.startsWith('BLIND_SPOT_');
+            const isPatrol = log.eventType.startsWith('PATROL_');
             const isAlert = log.eventType.startsWith('ALERT_');
             const isZone = log.eventType.startsWith('ZONE_');
             const isVessel = log.eventType.includes('VESSEL_');
             const isCorrelation = log.eventType.includes('CORRELATION');
 
-            const eventColor = isAlert
+            const eventColor = isBlindSpot
+              ? 'text-rose-400'
+              : isPatrol
+              ? 'text-sky-300'
+              : isAlert
               ? 'text-rose-400'
               : isZone
               ? 'text-amber-400'

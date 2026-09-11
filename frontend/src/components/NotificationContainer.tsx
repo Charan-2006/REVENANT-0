@@ -39,7 +39,10 @@ export const NotificationContainer: React.FC<NotificationContainerProps> = ({
     >
       {notifications.map((item) => {
         const isEntry = item.type === 'RESTRICTED_ENTRY';
-        const isCritical = item.severity === 'CRITICAL' || item.type === 'DARK_VESSEL';
+        // Sensor blind spots are surfaced at the same visual weight as critical contacts:
+        // an unmonitored restricted zone is an enforcement gap, not an informational notice.
+        const isCritical =
+          item.severity === 'CRITICAL' || item.type === 'DARK_VESSEL' || item.type === 'BLIND_SPOT';
 
         return (
           <div

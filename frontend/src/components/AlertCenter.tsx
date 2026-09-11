@@ -1,12 +1,16 @@
 import React, { useState } from 'react';
 import { SidebarPanel } from './SidebarPanel';
-import { MaritimeAlert, DispositionReasonCode } from '../types/maritime';
-import { AlertTriangle, ShieldAlert, Compass } from 'lucide-react';
+import { MaritimeAlert, DispositionReasonCode, PatrolUnit } from '../types/maritime';
+import { Vessel } from '../data/vessels';
+import { AlertTriangle, ShieldAlert, Compass, Anchor, Send } from 'lucide-react';
+import { findNearestPatrol } from '../utils/patrolUtils';
 
 interface AlertCenterProps {
   isOpen: boolean;
   onClose: () => void;
   alerts: MaritimeAlert[];
+  vessels?: Vessel[];
+  patrolUnits?: PatrolUnit[];
   onDispositAlert: (
     alertId: string,
     action: 'CONFIRM' | 'DISMISS' | 'ESCALATE',
@@ -14,14 +18,20 @@ interface AlertCenterProps {
     notes?: string
   ) => void;
   onSelectTarget: (targetId: string) => void;
+  onDispatchPatrol?: (alertId: string, patrolId: string) => void;
+  onRecallPatrol?: (patrolId: string) => void;
 }
 
 export const AlertCenter: React.FC<AlertCenterProps> = ({
   isOpen,
   onClose,
   alerts,
+  vessels = [],
+  patrolUnits = [],
   onDispositAlert,
   onSelectTarget,
+  onDispatchPatrol,
+  onRecallPatrol,
 }) => {
   const [selectedAlertForAction, setSelectedAlertForAction] = useState<{
     alert: MaritimeAlert;
@@ -227,6 +237,62 @@ export const AlertCenter: React.FC<AlertCenterProps> = ({
                     </span>
                   </div>
                 </div>
+
+                {/* Nearest Patrol Quick Action */}
+                {!isResolved && (() => {
+                  const targetVessel = vessels.find((v) => v.id === alert.targetId || v.name === alert.targetName);
+                  // Prefers a unit already RESPONDING to this alert/target, else the closest AVAILABLE
+                  // unit, so distance/ETA always describe the unit named in the row.
+                  const nearestInfo = targetVessel
+                    ? findNearestPatrol(targetVessel.lat, targetVessel.lon, patrolUnits, targetVessel.id, alert.alertId)
+                    : null;
+
+                  if (!nearestInfo) return null;
+
+                  const activePatrol = nearestInfo.patrol;
+                  const isAssigned = nearestInfo.isDispatchedToThisTarget;
+                  const distanceKm = nearestInfo.distanceKm;
+                  const etaMinutes = nearestInfo.etaMinutes;
+
+                  return (
+                    <div className="flex items-center justify-between p-1.5 rounded bg-[#071326] border border-sky-900/80 mb-2 text-[9.5px]">
+                      <div className="flex items-center gap-1 text-slate-300">
+                        <Anchor className="w-3 h-3 text-sky-400 shrink-0" />
+                        <span>
+                          <strong className="text-sky-300 font-mono">{activePatrol.id}</strong>{' '}
+                          <span className="text-slate-400">({distanceKm.toFixed(1)} km • ETA {etaMinutes}m)</span>
+                        </span>
+                      </div>
+                      {onDispatchPatrol && onRecallPatrol && (
+                        isAssigned || activePatrol.status === 'RESPONDING' ? (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onRecallPatrol(activePatrol.id);
+                            }}
+                            className="px-1.5 py-0.5 rounded bg-amber-950 hover:bg-amber-900 border border-amber-700 text-amber-300 font-mono text-[8.5px] font-bold"
+                          >
+                            RECALL
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onDispatchPatrol(alert.alertId, activePatrol.id);
+                            }}
+                            disabled={activePatrol.status === 'BUSY'}
+                            className="px-2 py-0.5 rounded bg-sky-600 hover:bg-sky-500 text-white font-mono text-[8.5px] font-bold flex items-center gap-1 shadow-xs"
+                          >
+                            <Send className="w-2.5 h-2.5" />
+                            <span>DISPATCH</span>
+                          </button>
+                        )
+                      )}
+                    </div>
+                  );
+                })()}
 
                 {/* Disposition Status or Action Controls */}
                 {isResolved ? (

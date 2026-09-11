@@ -167,3 +167,76 @@ export function isPointInFov(
   return angleDiff <= fovDeg / 2;
 }
 
+export interface CameraCoverageReport {
+  hasCoverage: boolean;
+  coveringCameras: any[];
+  nearestCamera: any | null;
+  nearestDistanceKm: number;
+}
+
+/**
+ * Evaluates whether a set of polygon points [lon, lat][] has optical camera coverage
+ * against coastal EO camera stations.
+ * - Coastal region & territorial sea (within 35 km / 19 NM of coastal stations): HAS COVERAGE (true).
+ * - Far offshore / high seas (beyond 35 km from all coastal stations): BLIND SPOT (false).
+ */
+export function checkCameraCoverage(
+  points: [number, number][],
+  cameras: any[] = []
+): CameraCoverageReport {
+  if (!points || points.length === 0 || !cameras || cameras.length === 0) {
+    return { hasCoverage: true, coveringCameras: [], nearestCamera: null, nearestDistanceKm: 0 };
+  }
+
+  const coveringCameras: any[] = [];
+  let nearestCamera: any | null = null;
+  let minDistanceKm = Infinity;
+
+  // Compute centroid of the points
+  const sumLon = points.reduce((acc, p) => acc + p[0], 0);
+  const sumLat = points.reduce((acc, p) => acc + p[1], 0);
+  const centerLon = sumLon / points.length;
+  const centerLat = sumLat / points.length;
+
+  // Coastal surveillance envelope threshold: 35 km (~19 NM, encompassing coastal waters & territorial sea)
+  const COASTAL_SURVEILLANCE_RANGE_KM = 35.0;
+
+  for (const cam of cameras) {
+    const camLat = cam.lat ?? cam.latitude;
+    const camLon = cam.lon ?? cam.longitude;
+    if (camLat === undefined || camLon === undefined) continue;
+
+    // Check minimum distance from camera to polygon centroid and individual vertices
+    const centerDistKm = getDistanceMeters(camLon, camLat, centerLon, centerLat) / 1000;
+    let minPolyDistKm = centerDistKm;
+
+    for (const pt of points) {
+      const ptDistKm = getDistanceMeters(camLon, camLat, pt[0], pt[1]) / 1000;
+      if (ptDistKm < minPolyDistKm) {
+        minPolyDistKm = ptDistKm;
+      }
+    }
+
+    if (minPolyDistKm < minDistanceKm) {
+      minDistanceKm = minPolyDistKm;
+      nearestCamera = cam;
+    }
+
+    const effectiveRangeKm = Math.max(COASTAL_SURVEILLANCE_RANGE_KM, cam.rangeKm ?? 15.0);
+    if (minPolyDistKm <= effectiveRangeKm) {
+      coveringCameras.push(cam);
+    }
+  }
+
+  // Has coverage if within coastal sensor network range (<= 35 km).
+  // Only flagged as no coverage if drawn far offshore beyond coastal surveillance range.
+  const hasCoverage = minDistanceKm <= COASTAL_SURVEILLANCE_RANGE_KM;
+
+  return {
+    hasCoverage,
+    coveringCameras,
+    nearestCamera,
+    nearestDistanceKm: Math.round(minDistanceKm * 10) / 10,
+  };
+}
+

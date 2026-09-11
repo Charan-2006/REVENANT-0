@@ -7,6 +7,7 @@ export interface RestrictedAreaLayerOptions {
   onSelectArea?: (area: RestrictedArea | null) => void;
   onDrawingComplete?: (coords: [number, number][]) => void;
   onDrawingCancel?: () => void;
+  onDrawPointsChange?: (points: [number, number][]) => void;
 }
 
 export class RestrictedAreaLayerController {
@@ -15,6 +16,7 @@ export class RestrictedAreaLayerController {
   private onSelectArea?: (area: RestrictedArea | null) => void;
   private onDrawingComplete?: (coords: [number, number][]) => void;
   private onDrawingCancel?: () => void;
+  private onDrawPointsChange?: (points: [number, number][]) => void;
 
   private isDrawing = false;
   private drawPoints: [number, number][] = []; // [lon, lat]
@@ -28,6 +30,7 @@ export class RestrictedAreaLayerController {
     this.onSelectArea = options.onSelectArea;
     this.onDrawingComplete = options.onDrawingComplete;
     this.onDrawingCancel = options.onDrawingCancel;
+    this.onDrawPointsChange = options.onDrawPointsChange;
 
     this.hoverPopup = new maplibregl.Popup({
       closeButton: false,
@@ -223,6 +226,7 @@ export class RestrictedAreaLayerController {
     this.cursorPoint = null;
     this.hoverPopup.remove();
     this.updateDrawSource();
+    if (this.onDrawPointsChange) this.onDrawPointsChange([]);
 
     this.map.getCanvas().style.cursor = 'crosshair';
     this.map.doubleClickZoom.disable();
@@ -244,6 +248,7 @@ export class RestrictedAreaLayerController {
     this.drawPoints = [];
     this.cursorPoint = null;
     this.updateDrawSource();
+    if (this.onDrawPointsChange) this.onDrawPointsChange([]);
   }
 
   /**
@@ -255,6 +260,7 @@ export class RestrictedAreaLayerController {
     this.cursorPoint = null;
     this.pendingPreviewCoords = null;
     this.updateDrawSource();
+    if (this.onDrawPointsChange) this.onDrawPointsChange([]);
 
     this.map.getCanvas().style.cursor = '';
     this.map.doubleClickZoom.enable();
@@ -501,6 +507,7 @@ export class RestrictedAreaLayerController {
 
       this.drawPoints.push(coord);
       this.updateDrawSource();
+      if (this.onDrawPointsChange) this.onDrawPointsChange([...this.drawPoints]);
     });
 
     // 4. Drawing Mode Double Click: Close polygon

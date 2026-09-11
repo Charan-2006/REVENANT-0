@@ -188,7 +188,7 @@ export type ActiveOverlay =
 
 export interface AppNotification {
   id: string;
-  type: 'RESTRICTED_ENTRY' | 'RESTRICTED_EXIT' | 'DARK_VESSEL' | 'ALERT';
+  type: 'RESTRICTED_ENTRY' | 'RESTRICTED_EXIT' | 'DARK_VESSEL' | 'ALERT' | 'PATROL_DISPATCH' | 'BLIND_SPOT';
   title: string;
   targetId: string;
   targetName: string;
@@ -209,7 +209,8 @@ export type AlertStatus =
   | 'OUT_OF_ENVELOPE' 
   | 'LOST_LINK' 
   | 'DARK_VESSEL' 
-  | 'RESTRICTED AREA ENTRY';
+  | 'RESTRICTED AREA ENTRY'
+  | 'SENSOR_BLIND_SPOT';
 
 export type AlertPriority = 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW';
 export type SuggestedAction = 'MONITOR' | 'INVESTIGATE' | 'VERIFY' | 'ESCALATE';
@@ -263,7 +264,10 @@ export type AuditEventType =
   | 'ALERT_DISMISSED' 
   | 'ALERT_ESCALATED' 
   | 'CORRELATION_UPDATED'
-  | 'OPTICAL_SIGHTING';
+  | 'OPTICAL_SIGHTING'
+  | 'PATROL_DISPATCHED'
+  | 'PATROL_RECALLED'
+  | 'BLIND_SPOT_ZONE_CREATED';
 
 export interface AuditLogEntry {
   eventId: string;
@@ -274,6 +278,50 @@ export interface AuditLogEntry {
   action: string;
   reason: string;
   metadata?: Record<string, any>;
+}
+
+// -----------------------------------------------------------------------------
+// TACTICAL COASTAL PATROL FLEET & DISPATCH MODELS
+// -----------------------------------------------------------------------------
+export type PatrolStatus = 'AVAILABLE' | 'RESPONDING' | 'BUSY' | 'ON_PATROL';
+
+export type PatrolCraftType =
+  | 'Fast Interceptor Craft'
+  | 'Offshore Patrol Vessel'
+  | 'Inshore Patrol Craft'
+  | 'Tactical RHIB'
+  | 'Marine Police Interceptor';
+
+export interface PatrolUnit {
+  id: string; // e.g., 'CP-07', 'CP-02'
+  name: string; // e.g., 'ICGS C-407 Fast Interceptor'
+  callsign: string; // e.g., 'VWC-07'
+  station: string; // e.g., 'Madras Coast Guard Station'
+  sector: string; // e.g., 'Sector 04 (Chennai Coast)'
+  basePortSector?: string; // e.g., 'Sector 04 (Chennai Coast)'
+  commandingOfficer?: string; // e.g., 'Asst Commandant V. Pillai'
+  type: PatrolCraftType;
+  craftType?: PatrolCraftType;
+  lat: number;
+  lon: number;
+  latitude?: number;
+  longitude?: number;
+  heading: number;
+  speedKnots: number; // Max intercept speed e.g. 35 kn
+  status: PatrolStatus;
+  assignedTargetId?: string; // e.g., 'DV-104'
+  assignedAlertId?: string; // e.g., 'ALT-101'
+  dispatchTime?: string;
+  fuelPercent?: number; // e.g. 92%
+  crewCount?: number; // e.g. 11
+}
+
+export interface NearestPatrolInfo {
+  patrol: PatrolUnit;
+  distanceKm: number;
+  distanceNM: number;
+  etaMinutes: number;
+  isDispatchedToThisTarget: boolean;
 }
 
 // -----------------------------------------------------------------------------

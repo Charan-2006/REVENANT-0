@@ -1,14 +1,28 @@
 import React, { useState } from 'react';
 import { DetailDrawer } from './DetailDrawer';
-import { MaritimeAlert, DispositionReasonCode } from '../types/maritime';
+import { MaritimeAlert, DispositionReasonCode, PatrolUnit } from '../types/maritime';
 import { Vessel } from '../data/vessels';
-import { ShieldAlert, Navigation, Radio, ArrowRight } from 'lucide-react';
+import {
+  ShieldAlert,
+  Navigation,
+  Radio,
+  ArrowRight,
+  Anchor,
+  Send,
+  CheckCircle2,
+  Ship,
+  Ruler,
+  Timer,
+  MapPin,
+} from 'lucide-react';
+import { findNearestPatrol, kmToNM } from '../utils/patrolUtils';
 
 export interface AlertDetailDrawerProps {
   isOpen: boolean;
   onClose: () => void;
   alert: MaritimeAlert | null;
   vessel: Vessel | null;
+  patrolUnits?: PatrolUnit[];
   onDispositAlert: (
     alertId: string,
     action: 'CONFIRM' | 'DISMISS' | 'ESCALATE',
@@ -17,6 +31,8 @@ export interface AlertDetailDrawerProps {
   ) => void;
   onViewVesselTelemetry?: (vesselId: string) => void;
   onSimulateAisMatch?: (vesselId: string) => void;
+  onDispatchPatrol?: (alertId: string, patrolId: string) => void;
+  onRecallPatrol?: (patrolId: string) => void;
 }
 
 export const AlertDetailDrawer: React.FC<AlertDetailDrawerProps> = ({
@@ -24,9 +40,12 @@ export const AlertDetailDrawer: React.FC<AlertDetailDrawerProps> = ({
   onClose,
   alert,
   vessel,
+  patrolUnits = [],
   onDispositAlert,
   onViewVesselTelemetry,
   onSimulateAisMatch,
+  onDispatchPatrol,
+  onRecallPatrol,
 }) => {
   const [dispositionAction, setDispositionAction] = useState<'CONFIRM' | 'DISMISS' | 'ESCALATE'>('CONFIRM');
   const [reasonCode, setReasonCode] = useState<DispositionReasonCode>('CONFIRMED_CONTACT');
@@ -37,6 +56,18 @@ export const AlertDetailDrawer: React.FC<AlertDetailDrawerProps> = ({
   const isCritical = alert.priority === 'CRITICAL';
   const isResolved = alert.currentState !== 'ACTIVE';
   const isDark = vessel?.status === 'DARK' || alert.status === 'DARK_VESSEL';
+
+  // Resolve the tasked patrol craft for this alert. findNearestPatrol prefers a unit already
+  // RESPONDING to this alert/target, and otherwise selects the closest AVAILABLE unit — so the
+  // distance and ETA always belong to the unit actually shown on the card.
+  const nearestInfo = vessel
+    ? findNearestPatrol(vessel.lat, vessel.lon, patrolUnits, vessel.id, alert.alertId)
+    : null;
+
+  const activePatrol = nearestInfo?.patrol;
+  const isPatrolAssigned = nearestInfo?.isDispatchedToThisTarget === true;
+  const patrolDistanceKm = nearestInfo?.distanceKm;
+  const patrolEtaMinutes = nearestInfo?.etaMinutes;
 
   const handleActionChange = (action: 'CONFIRM' | 'DISMISS' | 'ESCALATE') => {
     setDispositionAction(action);
@@ -170,16 +201,182 @@ export const AlertDetailDrawer: React.FC<AlertDetailDrawerProps> = ({
           )}
         </div>
 
-        {/* Action Recommendation */}
-        <div className="p-2 rounded bg-[#1c1813] border border-amber-900/60 flex items-center justify-between">
-          <div>
-            <span className="text-[8.5px] uppercase font-bold text-amber-400 block tracking-wider">Protocol</span>
-            <span className="text-[10px] text-slate-300">Investigation Action</span>
+        {/* DEDICATED MITIGATION PROCESS & ACTION PLAN
+            Vessel-directed steps, so it is suppressed for target-less alerts such as
+            SENSOR_BLIND_SPOT zone notices, which have no contact to hail or intercept. */}
+        {vessel && (
+          <div className="p-2.5 rounded bg-[#101b2b] border border-cyan-800/80 space-y-2 shadow-xs">
+            <div className="flex items-center justify-between">
+              <span className="text-[9.5px] uppercase font-bold text-cyan-300 tracking-wider flex items-center gap-1.5">
+                <ShieldAlert className="w-3.5 h-3.5 text-cyan-400" />
+                Recommended Mitigation Process
+              </span>
+              <span className="text-[8px] font-mono px-1.5 py-0.5 rounded bg-cyan-950 text-cyan-300 border border-cyan-700 font-bold uppercase">
+                {alert.status === 'RESTRICTED AREA ENTRY' ? 'ZONE MITIGATION' : 'TACTICAL RESPONSE'}
+              </span>
+            </div>
+
+            <div className="space-y-1.5 text-[10px]">
+              {/* Step 1: Radio Challenge */}
+              <div className="p-1.5 rounded bg-[#07111e] border border-cyan-950/80 flex items-start gap-2">
+                <span className="w-4 h-4 rounded-full bg-cyan-900/70 text-cyan-200 text-[9px] font-bold flex items-center justify-center shrink-0 mt-0.5 font-mono">
+                  1
+                </span>
+                <div className="space-y-0.5 flex-1">
+                  <div className="font-bold text-slate-200 text-[10.5px]">Broadcast Radio Challenge & Warning</div>
+                  <div className="text-slate-400 text-[9.5px] leading-tight">
+                    Hail target vessel on <strong>VHF Marine Ch 16 (156.8 MHz)</strong> & DSC Ch 70. Issue immediate instruction to alter course and exit {zoneName}.
+                  </div>
+                </div>
+              </div>
+
+              {/* Step 2: Contact Nearest Patrol Vessel */}
+              {activePatrol && patrolDistanceKm !== undefined && (
+                <div className="p-1.5 rounded bg-[#07111e] border border-cyan-950/80 flex items-start gap-2">
+                  <span className="w-4 h-4 rounded-full bg-emerald-900/70 text-emerald-200 text-[9px] font-bold flex items-center justify-center shrink-0 mt-0.5 font-mono">
+                    2
+                  </span>
+                  <div className="space-y-0.5 flex-1">
+                    <div className="font-bold text-slate-200 text-[10.5px] flex items-center gap-1 flex-wrap">
+                      <span>Task Nearby Patrol Unit:</span>
+                      <strong className="text-cyan-300 font-mono">{activePatrol.id}</strong>
+                      <span className="text-slate-400 font-normal text-[9.5px]">— {activePatrol.name}</span>
+                    </div>
+                    <div className="text-slate-300 text-[9.5px] leading-tight">
+                      Task nearest patrol craft available in {activePatrol.sector} at{' '}
+                      <strong className="font-mono">{patrolDistanceKm.toFixed(1)} km</strong> away (ETA:{' '}
+                      <strong className="text-emerald-300 font-mono font-bold">{patrolEtaMinutes} min</strong>).
+                      Contact commanding officer on <strong>VHF Tactical Ch 12 (Callsign: {activePatrol.callsign})</strong> to
+                      initiate immediate intercept and verification vector.
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Step 3: Tactical Boarding & Enforcement */}
+              <div className="p-1.5 rounded bg-[#07111e] border border-cyan-950/80 flex items-start gap-2">
+                <span className="w-4 h-4 rounded-full bg-cyan-900/70 text-cyan-200 text-[9px] font-bold flex items-center justify-center shrink-0 mt-0.5 font-mono">
+                  3
+                </span>
+                <div className="space-y-0.5 flex-1">
+                  <div className="font-bold text-slate-200 text-[10.5px]">Escort & Compliance Verification</div>
+                  <div className="text-slate-400 text-[9.5px] leading-tight">
+                    Deploy boarding party if contact fails to respond within 5 minutes. Log telemetry fix and file civil law enforcement non-compliance report.
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
-          <span className="font-mono font-bold text-[10px] bg-amber-950 text-amber-300 px-2 py-0.5 rounded border border-amber-800 uppercase">
-            {alert.suggestedAction || 'INVESTIGATE'}
-          </span>
-        </div>
+        )}
+
+        {/* NEAREST PATROL INTERCEPT COMMAND CARD */}
+        {activePatrol && patrolDistanceKm !== undefined && patrolEtaMinutes !== undefined && (
+          <div className="p-2.5 rounded bg-[#0b1528] border border-sky-800/80 space-y-2 shadow-sm">
+            <div className="flex items-center justify-between">
+              <span className="text-[9px] uppercase font-bold tracking-wider text-sky-400 flex items-center gap-1.5">
+                <Anchor className="w-3.5 h-3.5 text-sky-400" />
+                Nearest Coastal Patrol
+              </span>
+              <span
+                className={`text-[8.5px] font-mono px-2 py-0.5 rounded font-bold border flex items-center gap-1 ${
+                  isPatrolAssigned || activePatrol.status === 'RESPONDING'
+                    ? 'bg-sky-950 text-sky-300 border-sky-600 animate-pulse'
+                    : activePatrol.status === 'AVAILABLE'
+                    ? 'bg-emerald-950 text-emerald-300 border-emerald-700'
+                    : 'bg-amber-950 text-amber-300 border-amber-700'
+                }`}
+              >
+                <span
+                  className={`w-1.5 h-1.5 rounded-full ${
+                    isPatrolAssigned || activePatrol.status === 'RESPONDING'
+                      ? 'bg-sky-400'
+                      : activePatrol.status === 'AVAILABLE'
+                      ? 'bg-emerald-400'
+                      : 'bg-amber-400'
+                  }`}
+                />
+                {isPatrolAssigned || activePatrol.status === 'RESPONDING'
+                  ? 'RESPONDING'
+                  : activePatrol.status}
+              </span>
+            </div>
+
+            <div className="bg-[#070e1c] p-2 rounded border border-sky-950 space-y-1.5">
+              <div className="flex items-center justify-between">
+                <span className="text-slate-300 font-bold text-[11px] flex items-center gap-1.5">
+                  <Ship className="w-3.5 h-3.5 text-sky-400 shrink-0" />
+                  {activePatrol.id} <span className="font-normal text-slate-400">({activePatrol.name})</span>
+                </span>
+                <span className="text-[8.5px] font-mono text-sky-300 font-semibold px-1.5 py-0.5 rounded bg-sky-950/80 border border-sky-900">
+                  {activePatrol.type || activePatrol.craftType}
+                </span>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2 text-[10px] text-slate-300 pt-1 border-t border-sky-900/40">
+                <div className="flex items-center gap-1">
+                  <Ruler className="w-3 h-3 text-slate-400 shrink-0" />
+                  <span className="text-slate-400">Distance:</span>
+                  <strong className="font-mono text-sky-200">
+                    {patrolDistanceKm.toFixed(1)} km
+                  </strong>
+                  <span className="text-[8.5px] text-slate-400 font-mono">({kmToNM(patrolDistanceKm).toFixed(1)} NM)</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <Timer className="w-3 h-3 text-slate-400 shrink-0" />
+                  <span className="text-slate-400">ETA:</span>
+                  <strong className="font-mono text-emerald-300 font-bold">
+                    {patrolEtaMinutes} min
+                  </strong>
+                  <span className="text-[8.5px] text-slate-400 font-mono">(@ {activePatrol.speedKnots} kn)</span>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between text-[9px] text-slate-400 pt-1 border-t border-sky-900/30">
+                <span className="flex items-center gap-1">
+                  <MapPin className="w-2.5 h-2.5 shrink-0" />
+                  Station: <strong className="text-slate-300">{activePatrol.station || activePatrol.sector}</strong>
+                </span>
+                <span>Callsign: <strong className="text-slate-300 font-mono">{activePatrol.callsign}</strong></span>
+              </div>
+            </div>
+
+            {/* Dispatch / Recall Action Button */}
+            {onDispatchPatrol && onRecallPatrol && (
+              <div>
+                {isPatrolAssigned || activePatrol.status === 'RESPONDING' ? (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onRecallPatrol(activePatrol.id);
+                    }}
+                    className="w-full py-1.5 px-2 bg-amber-600 hover:bg-amber-500 text-white rounded font-bold text-[10px] flex items-center justify-center gap-1.5 shadow-sm transition-colors"
+                  >
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    <span>[ RECALL / STAND DOWN PATROL ]</span>
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onDispatchPatrol(alert.alertId, activePatrol.id);
+                    }}
+                    disabled={activePatrol.status === 'BUSY'}
+                    className={`w-full py-1.5 px-2 rounded font-bold text-[10px] flex items-center justify-center gap-1.5 shadow-sm transition-colors ${
+                      activePatrol.status === 'BUSY'
+                        ? 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700'
+                        : 'bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-500 hover:to-indigo-500 text-white font-mono tracking-wider'
+                    }`}
+                  >
+                    <Send className="w-3.5 h-3.5" />
+                    <span>[ DISPATCH PATROL ]</span>
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Operator Disposition Section */}
         <div className="p-2.5 bg-[#111827] rounded border border-slate-800 space-y-2">

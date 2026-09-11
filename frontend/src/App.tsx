@@ -12,9 +12,14 @@ import {
   AlertState,
   ActiveOverlay,
   AppNotification,
+  PatrolUnit,
 } from './types/maritime';
 import { INITIAL_RESTRICTED_AREAS } from './data/mockRestrictedAreas';
 import { evaluateVesselGeofence, detectGeofenceTransitions } from './utils/geofenceEngine';
+import { INITIAL_PATROL_UNITS } from './data/patrolUnits';
+import { findNearestPatrol, calculateHaversineDistanceKm, calculateInterceptETA } from './utils/patrolUtils';
+import { checkCameraCoverage } from './utils/geoUtils';
+import { MOCK_CAMERAS } from './data/mockCameras';
 
 // UI Components
 import { Header } from './components/Header';
@@ -26,7 +31,6 @@ import { CameraPopupCard } from './components/CameraPopupCard';
 import { CameraFeedModal } from './components/CameraFeedModal';
 import { LayerControlPopover, MapLayersState } from './components/LayerControlPopover';
 import { SensorPanel } from './components/SensorPanel';
-import { MOCK_CAMERAS } from './data/mockCameras';
 import { DrawingPrompt } from './components/DrawingPrompt';
 import { SaveAreaModal } from './components/SaveAreaModal';
 import { RestrictedAreaPopupCard } from './components/RestrictedAreaPopupCard';
@@ -82,9 +86,19 @@ export const App: React.FC = () => {
   // Free-Draw mode state
   const [isDrawingRestricted, setIsDrawingRestricted] = useState(false);
   const [drawPointCount, setDrawPointCount] = useState(0);
+  const [drawPoints, setDrawPoints] = useState<[number, number][]>([]);
   const [pendingPolygonCoords, setPendingPolygonCoords] = useState<[number, number][] | null>(null);
   const [isSaveModalOpen, setIsSaveModalOpen] = useState(false);
   const onFinishDrawingRef = useRef<(() => void) | null>(null);
+
+  // Live Optical Camera Coverage Evaluation during drawing & saving
+  const drawingCoverageReport = useMemo(() => {
+    return checkCameraCoverage(drawPoints, MOCK_CAMERAS);
+  }, [drawPoints]);
+
+  const pendingCoverageReport = useMemo(() => {
+    return checkCameraCoverage(pendingPolygonCoords || [], MOCK_CAMERAS);
+  }, [pendingPolygonCoords]);
 
   // Events & Notifications
   const [events, setEvents] = useState<RestrictedAreaEvent[]>([]);
@@ -218,14 +232,19 @@ export const App: React.FC = () => {
   const [isSimulating, setIsSimulating] = useState(false);
   const simulationStepRef = useRef(0);
 
-  // Maritime Layer Toggles (EEZ, 12 NM TERRITORIAL SEA, VESSELS, EO CAMERAS)
+  // Maritime Layer Toggles (EEZ, 12 NM TERRITORIAL SEA, VESSELS, EO CAMERAS, PATROL CRAFT)
   const [layers, setLayers] = useState<MapLayersState>({
     eez: true,
     territorialSea: true,
     vessels: true,
     cameras: true,
+    patrolUnits: true,
     contiguousZone: false,
   });
+
+  // Coastal Patrol Fleet State (10 realistic ICG / Marine Police Units)
+  const [patrolUnits, setPatrolUnits] = useState<PatrolUnit[]>(INITIAL_PATROL_UNITS);
+  const [selectedPatrolId, setSelectedPatrolId] = useState<string | null>(null);
 
   // Legend visibility
   const [isLegendOpen, setIsLegendOpen] = useState(false);
@@ -450,16 +469,84 @@ export const App: React.FC = () => {
       },
     };
 
+    const savedCoords = [...pendingPolygonCoords];
     setRestrictedAreas((prev) => [...prev, newArea]);
     setIsSaveModalOpen(false);
     setPendingPolygonCoords(null);
+    setDrawPoints([]);
+
+    // Check optical camera coverage for the newly established restricted zone
+    const coverage = checkCameraCoverage(savedCoords, MOCK_CAMERAS);
+
+    // If the restricted zone has NO camera access, generate an operational blind spot alert!
+    if (!coverage.hasCoverage) {
+      const blindAlertId = `ALT-BLIND-${Date.now().toString(36).toUpperCase().slice(-4)}`;
+      const blindAlert: MaritimeAlert = {
+        alertId: blindAlertId,
+        timestamp: new Date().toISOString().slice(11, 19) + ' UTC',
+        targetId: newId,
+        targetName: `${name.toUpperCase()} (NO CAMERA ACCESS)`,
+        status: 'SENSOR_BLIND_SPOT',
+        priority: 'HIGH',
+        suggestedAction: 'INVESTIGATE',
+        evidence: {
+          source: 'Optical Sensor Envelope Audit',
+          confidence: 99,
+          zoneName: name,
+          details: `Zone established in optical blind spot (${coverage.nearestDistanceKm} km from nearest PSS station). Optical camera access is unavailable to detect dark vessels. Task mobile patrol unit to establish radar/visual coverage.`,
+        },
+        currentState: 'ACTIVE',
+      };
+
+      setAlerts((prev) => [blindAlert, ...prev]);
+
+      // Add high priority notification toast
+      const newNotif: AppNotification = {
+        id: `NOTIF-BLIND-${Date.now()}`,
+        type: 'BLIND_SPOT',
+        title: 'SENSOR BLIND SPOT ZONE CREATED',
+        targetId: newId,
+        targetName: `${name} — 0% Camera Coverage`,
+        zoneName: name,
+        timestamp: new Date().toISOString().slice(11, 19) + ' UTC',
+        alertId: blindAlertId,
+        severity: 'HIGH',
+        createdAt: Date.now(),
+      };
+      setNotifications((prev) => [newNotif, ...prev.slice(0, 2)]);
+
+      // Immutable audit record of the sensor blind spot, separate from the zone-creation record.
+      addAuditLog({
+        eventType: 'BLIND_SPOT_ZONE_CREATED',
+        targetId: newId,
+        action: `Restricted zone "${name}" established in optical sensor blind spot — 0% EO camera coverage (nearest shore station ${coverage.nearestDistanceKm} km away)`,
+        reason: 'NO_OPTICAL_COVERAGE',
+        metadata: {
+          zoneName: name,
+          zoneType,
+          alertId: blindAlertId,
+          hasCameraCoverage: false,
+          nearestSensorDistanceKm: coverage.nearestDistanceKm,
+          nearestSensorId: coverage.nearestCamera?.id ?? null,
+          coordinates: savedCoords,
+        },
+      });
+    }
 
     addAuditLog({
       eventType: 'ZONE_CREATED',
       targetId: newId,
-      action: `Created ${zoneType} zone: ${name} (Window: ${finalStartTime.slice(11, 19)} to ${finalExpiresAt ? finalExpiresAt.slice(11, 19) : 'Perm'})`,
+      action: `Created ${zoneType} zone: ${name} (Camera Access: ${coverage.hasCoverage ? 'COVERED' : 'BLIND SPOT'})`,
       reason: 'OPERATOR_CREATION',
-      metadata: { name, zoneType, expiresInMinutes, startTime: finalStartTime, expiresAt: finalExpiresAt },
+      metadata: {
+        name,
+        zoneType,
+        expiresInMinutes,
+        startTime: finalStartTime,
+        expiresAt: finalExpiresAt,
+        hasCameraCoverage: coverage.hasCoverage,
+        nearestSensorDistanceKm: coverage.nearestDistanceKm,
+      },
     });
   };
 
@@ -712,6 +799,184 @@ export const App: React.FC = () => {
       metadata: { alertId, notes },
     });
   };
+
+  // ---------------------------------------------------------------------------
+  // NEAREST PATROL DISPATCH & RECALL ACTIONS
+  // ---------------------------------------------------------------------------
+  const handleDispatchPatrol = (alertId: string, patrolId: string, targetIdOverride?: string) => {
+    const targetAlert = alerts.find((a) => a.alertId === alertId);
+    const resolvedTargetId = targetAlert?.targetId ?? targetIdOverride;
+
+    setPatrolUnits((prev) =>
+      prev.map((p) => {
+        if (p.id === patrolId) {
+          return {
+            ...p,
+            status: 'RESPONDING',
+            assignedAlertId: targetAlert ? alertId : undefined,
+            assignedTargetId: resolvedTargetId,
+            dispatchTime: new Date().toISOString(),
+          };
+        }
+        return p;
+      })
+    );
+
+    const patrol = patrolUnits.find((p) => p.id === patrolId);
+    const unitName = patrol ? `${patrol.id} (${patrol.name})` : patrolId;
+    const targetName =
+      targetAlert?.targetName ||
+      evaluatedVessels.find((v) => v.id === resolvedTargetId)?.name ||
+      resolvedTargetId ||
+      'Contact';
+
+    addAuditLog({
+      eventType: 'PATROL_DISPATCHED',
+      targetId: patrolId,
+      action: `Dispatched ${unitName} to intercept ${targetName}`,
+      reason: 'OPERATIONAL_INTERCEPT',
+      metadata: { alertId: targetAlert ? alertId : null, targetId: resolvedTargetId, patrolId },
+    });
+
+    const newNotif: AppNotification = {
+      id: `NOTIF-PATROL-${Date.now()}`,
+      type: 'PATROL_DISPATCH',
+      title: 'PATROL INTERCEPT DISPATCHED',
+      targetId: patrolId,
+      targetName: `${unitName} ➔ ${targetName}`,
+      timestamp: new Date().toISOString().replace('T', ' ').slice(11, 19) + ' UTC',
+      severity: 'HIGH',
+      createdAt: Date.now(),
+    };
+    setNotifications((prev) => [newNotif, ...prev.slice(0, 2)]);
+  };
+
+  const handleRecallPatrol = (patrolId: string) => {
+    setPatrolUnits((prev) =>
+      prev.map((p) => {
+        if (p.id === patrolId) {
+          return {
+            ...p,
+            status: 'AVAILABLE',
+            assignedAlertId: undefined,
+            assignedTargetId: undefined,
+          };
+        }
+        return p;
+      })
+    );
+
+    const patrol = patrolUnits.find((p) => p.id === patrolId);
+    const unitName = patrol ? `${patrol.id} (${patrol.name})` : patrolId;
+
+    addAuditLog({
+      eventType: 'PATROL_RECALLED',
+      targetId: patrolId,
+      action: `Recalled ${unitName} to base station`,
+      reason: 'STAND_DOWN',
+      metadata: { patrolId },
+    });
+  };
+
+  /**
+   * Dispatch initiated from the Vessel Inspection Drawer, where the operator is looking at a
+   * contact rather than an alert. Binds to the vessel's own ACTIVE alert when one exists so the
+   * alert drawer and the vessel drawer stay in sync, otherwise tasks the unit to the raw contact.
+   */
+  const handleDispatchPatrolToVessel = (vesselId: string, patrolId: string) => {
+    const vesselAlert = alerts.find((a) => a.targetId === vesselId && a.currentState === 'ACTIVE');
+    handleDispatchPatrol(vesselAlert?.alertId ?? '', patrolId, vesselId);
+  };
+
+  // Compute active tactical intercept line for MapView
+  const activeIntercept = useMemo(() => {
+    // 1. Responding patrol unit takes highest priority
+    const respondingPatrol = patrolUnits.find(
+      (p) => p.status === 'RESPONDING' && (p.assignedTargetId || p.assignedAlertId)
+    );
+    if (respondingPatrol) {
+      const targetVessel = evaluatedVessels.find(
+        (v) =>
+          v.id === respondingPatrol.assignedTargetId ||
+          (respondingPatrol.assignedAlertId &&
+            alerts.find((a) => a.alertId === respondingPatrol.assignedAlertId)?.targetId === v.id)
+      );
+      if (targetVessel) {
+        const pLat = respondingPatrol.lat ?? respondingPatrol.latitude ?? 0;
+        const pLon = respondingPatrol.lon ?? respondingPatrol.longitude ?? 0;
+        const distKm = calculateHaversineDistanceKm(
+          targetVessel.lat,
+          targetVessel.lon,
+          pLat,
+          pLon
+        );
+        const eta = calculateInterceptETA(distKm, respondingPatrol.speedKnots);
+        return {
+          patrolCoordinates: [pLon, pLat] as [number, number],
+          targetCoordinates: [targetVessel.lon, targetVessel.lat] as [number, number],
+          patrolId: respondingPatrol.id,
+          targetId: targetVessel.id,
+          targetName: targetVessel.name || targetVessel.id,
+          distanceKm: distKm,
+          etaMinutes: eta,
+          isDispatched: true,
+        };
+      }
+    }
+
+    // 2. Active selected alert drawer
+    if (activeOverlay === 'alert' && selectedAlert) {
+      const targetVessel = evaluatedVessels.find(
+        (v) => v.id === selectedAlert.targetId || v.name === selectedAlert.targetName
+      );
+      if (targetVessel) {
+        const nearest = findNearestPatrol(targetVessel.lat, targetVessel.lon, patrolUnits);
+        if (nearest) {
+          const pLat = nearest.patrol.lat ?? nearest.patrol.latitude ?? 0;
+          const pLon = nearest.patrol.lon ?? nearest.patrol.longitude ?? 0;
+          return {
+            patrolCoordinates: [pLon, pLat] as [number, number],
+            targetCoordinates: [targetVessel.lon, targetVessel.lat] as [number, number],
+            patrolId: nearest.patrol.id,
+            targetId: targetVessel.id,
+            targetName: targetVessel.name || targetVessel.id,
+            distanceKm: nearest.distanceKm,
+            etaMinutes: nearest.etaMinutes,
+            isDispatched: false,
+          };
+        }
+      }
+    }
+
+    // 3. Selected critical or dark vessel
+    if (activeOverlay === 'vesselDetail' && selectedVesselId) {
+      const targetVessel = evaluatedVessels.find((v) => v.id === selectedVesselId);
+      if (
+        targetVessel &&
+        (targetVessel.status === 'DARK' ||
+          targetVessel.geofenceStatus === 'INSIDE_RESTRICTED' ||
+          targetVessel.displayStatus === 'RESTRICTED')
+      ) {
+        const nearest = findNearestPatrol(targetVessel.lat, targetVessel.lon, patrolUnits);
+        if (nearest) {
+          const pLat = nearest.patrol.lat ?? nearest.patrol.latitude ?? 0;
+          const pLon = nearest.patrol.lon ?? nearest.patrol.longitude ?? 0;
+          return {
+            patrolCoordinates: [pLon, pLat] as [number, number],
+            targetCoordinates: [targetVessel.lon, targetVessel.lat] as [number, number],
+            patrolId: nearest.patrol.id,
+            targetId: targetVessel.id,
+            targetName: targetVessel.name || targetVessel.id,
+            distanceKm: nearest.distanceKm,
+            etaMinutes: nearest.etaMinutes,
+            isDispatched: false,
+          };
+        }
+      }
+    }
+
+    return null;
+  }, [patrolUnits, evaluatedVessels, alerts, activeOverlay, selectedAlert, selectedVesselId]);
 
   // Helper to fly/center
   const flyToLocation = (lat: number, lon: number, zoom: number = 8) => {
@@ -1285,6 +1550,13 @@ export const App: React.FC = () => {
         onFinishDrawingRef={onFinishDrawingRef}
         drawPointCount={drawPointCount}
         onPointCountChange={setDrawPointCount}
+        onDrawPointsChange={setDrawPoints}
+        patrolUnits={patrolUnits}
+        selectedPatrolId={selectedPatrolId}
+        onSelectPatrol={(patrol) => {
+          setSelectedPatrolId(patrol?.id || null);
+        }}
+        activeIntercept={activeIntercept}
       />
 
       {/* Primary Maritime GIS Toolbar */}
@@ -1337,7 +1609,11 @@ export const App: React.FC = () => {
         isOpen={activeSidebarPanel === 'events'}
         onClose={() => setActiveSidebarPanel(null)}
         alerts={alerts}
+        vessels={evaluatedVessels}
+        patrolUnits={patrolUnits}
         onDispositAlert={handleDispositAlert}
+        onDispatchPatrol={handleDispatchPatrol}
+        onRecallPatrol={handleRecallPatrol}
         onSelectTarget={(targetId) => {
           const vsl = vessels.find((v) => v.id === targetId);
           if (vsl) {
@@ -1363,6 +1639,7 @@ export const App: React.FC = () => {
         cameras={MOCK_CAMERAS as EOCamera[]}
         onSelectCamera={(cam) => {
           flyToLocation(cam.lat, cam.lon, 11);
+          setLayers((prev) => ({ ...prev, cameras: true }));
           setSelectedCamera(cam);
           setSelectedVesselId(null);
           setSelectedRestrictedArea(null);
@@ -1404,17 +1681,23 @@ export const App: React.FC = () => {
         }}
         alert={selectedAlert}
         vessel={selectedVessel}
+        patrolUnits={patrolUnits}
         onDispositAlert={handleDispositAlert}
         onViewVesselTelemetry={(vslId) => {
           setSelectedVesselId(vslId);
           setActiveOverlay('vesselDetail');
         }}
         onSimulateAisMatch={handleSimulateAisMatch}
+        onDispatchPatrol={handleDispatchPatrol}
+        onRecallPatrol={handleRecallPatrol}
       />
 
       {/* Selected Vessel Contextual Card */}
       <VesselDetailCard
         vessel={activeOverlay === 'vesselDetail' ? selectedVessel : null}
+        patrolUnits={patrolUnits}
+        onDispatchPatrol={handleDispatchPatrolToVessel}
+        onRecallPatrol={handleRecallPatrol}
         onClose={() => {
           setActiveOverlay(null);
           setSelectedVesselId(null);
@@ -1458,6 +1741,8 @@ export const App: React.FC = () => {
       <SaveAreaModal
         isOpen={isSaveModalOpen}
         defaultName={`RESTRICTED AREA ${(restrictedAreas.length + 1).toString().padStart(2, '0')}`}
+        hasCameraCoverage={pendingCoverageReport.hasCoverage}
+        nearestCameraDistanceKm={pendingCoverageReport.nearestDistanceKm}
         onSave={handleSaveArea}
         onCancel={() => {
           setIsSaveModalOpen(false);
@@ -1490,6 +1775,8 @@ export const App: React.FC = () => {
       <DrawingPrompt
         isDrawing={isDrawingRestricted}
         pointCount={drawPointCount}
+        hasCameraCoverage={drawingCoverageReport.hasCoverage}
+        nearestCameraDistanceKm={drawingCoverageReport.nearestDistanceKm}
         onFinish={() => {
           if (onFinishDrawingRef.current) {
             onFinishDrawingRef.current();

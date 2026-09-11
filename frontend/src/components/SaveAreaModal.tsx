@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
-import { ShieldAlert, Check, Clock, Calendar } from 'lucide-react';
+import { ShieldAlert, Check, Clock, Calendar, AlertTriangle, EyeOff } from 'lucide-react';
 import { Modal } from './Modal';
 import { ZoneType } from '../types/maritime';
 
 interface SaveAreaModalProps {
   isOpen: boolean;
   defaultName: string;
+  hasCameraCoverage?: boolean;
+  nearestCameraDistanceKm?: number;
   onSave: (
     name: string,
     zoneType: ZoneType,
@@ -19,6 +21,8 @@ interface SaveAreaModalProps {
 export const SaveAreaModal: React.FC<SaveAreaModalProps> = ({
   isOpen,
   defaultName,
+  hasCameraCoverage = true,
+  nearestCameraDistanceKm,
   onSave,
   onCancel,
 }) => {
@@ -79,6 +83,26 @@ export const SaveAreaModal: React.FC<SaveAreaModalProps> = ({
       maxWidth="max-w-md"
     >
       <form onSubmit={handleSubmit} className="space-y-3 text-[11px] text-slate-200 font-sans">
+        {/* Blind Spot Camera Coverage Warning Banner */}
+        {!hasCameraCoverage && (
+          <div className="p-2.5 rounded bg-[#200e13] border border-rose-600/90 text-rose-200 text-[10.5px] space-y-1 shadow-inner">
+            <div className="flex items-center gap-1.5 text-rose-300 font-bold uppercase tracking-wider text-[10px]">
+              <EyeOff className="w-3.5 h-3.5 text-rose-400" />
+              <span>Camera Coverage Warning (Sensor Blind Spot)</span>
+            </div>
+            <div className="text-[10px] text-slate-300 leading-tight">
+              This restricted zone has <strong>0% coastal EO optical camera coverage</strong>
+              {nearestCameraDistanceKm !== undefined && nearestCameraDistanceKm < 999
+                ? ` (nearest sensor station is ${nearestCameraDistanceKm.toFixed(1)} km away)`
+                : ''}. Dark vessels without AIS transponders cannot be optically detected in this area.
+            </div>
+            <div className="text-[9px] text-rose-300/90 pt-0.5 border-t border-rose-900/60 flex items-center gap-1">
+              <AlertTriangle className="w-2.5 h-2.5" />
+              <span>An unmonitored blind-spot operational alert will be automatically registered upon creation.</span>
+            </div>
+          </div>
+        )}
+
         {/* Zone Name */}
         <div>
           <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
